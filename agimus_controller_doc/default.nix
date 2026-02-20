@@ -2,11 +2,8 @@
   stdenv,
   python3Packages,
   lib,
-<<<<<<< HEAD
   agimus-controller,
-=======
   fetchFromGitHub ? null,
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
   ...
 }:
 
@@ -21,10 +18,6 @@ stdenv.mkDerivation rec {
     sphinx-rtd-theme
     myst-parser
     sphinx-autodoc-typehints
-<<<<<<< HEAD
-    agimus-controller
-=======
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
   ];
 
   buildPhase = ''
@@ -39,11 +32,7 @@ stdenv.mkDerivation rec {
 
   meta = with lib; {
     description = "Sphinx HTML documentation for agimus_controller";
-<<<<<<< HEAD
     license = licenses.bsd3;
-=======
-    license = licenses.unfree; # docs only
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
     platforms = platforms.unix;
   };
 }
