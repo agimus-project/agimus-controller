@@ -2,6 +2,7 @@
 title: OCP Crocoddyl Generic API
 ---
 
+<<<<<<< HEAD
 # AGIMUS controller: generic crocoddyl OCP
 
 
@@ -31,6 +32,38 @@ Below are the main cost and residual classes implemented in this module. Click t
 
 - [CostModelResidual](CostModelResidual.md) — Residual-based cost
 - [CostModelSumItem](CostModelSumItem.md) — Weighted cost sum item
+=======
+# `agimus_controller.ocp.ocp_croco_generic`
+
+This page exposes the API of the `ocp_croco_generic` module.
+
+```{automodule} agimus_controller.ocp.ocp_croco_generic
+:members:
+:undoc-members:
+:show-inheritance:
+```
+
+## Costs — quick index
+
+Below are the main cost and residual classes implemented in this module. Click the class names above to open full API docs.
+
+```{autosummary}
+ActivationModelWeightedQuad
+ActivationModelExp
+ActivationModelQuadExp
+ResidualModelState
+ResidualModelControl
+ResidualModelControlGrav
+ResidualModelFramePlacement
+ResidualModelFrameTranslation
+ResidualModelFrameRotation
+ResidualModelFrameVelocity
+ResidualDistanceCollision
+ResidualDistanceCollision2
+CostModelResidual
+CostModelSumItem
+```
+>>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
 
 ## Example usage
 
@@ -44,6 +77,7 @@ print(ocp._data.running_model.differential.costs)
 # Programmatically create a Placement residual
 # residual = ResidualModelFramePlacement(id="tool0")
 ```
+<<<<<<< HEAD
 
 ## Module API
 
@@ -54,3 +88,5 @@ This page exposes the API of the `ocp_croco_generic` module.
 :undoc-members:
 :show-inheritance:
 ```
+=======
+>>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)

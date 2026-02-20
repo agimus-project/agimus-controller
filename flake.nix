@@ -33,6 +33,14 @@
                   ];
                 };
               };
+              agimus-controller-doc = _: _: {
+                src = lib.fileset.toSource {
+                  root = ./.;
+                  fileset = lib.fileset.unions [
+                    ./agimus_controller_doc
+                  ];
+                };
+              };
             };
           }
         ];

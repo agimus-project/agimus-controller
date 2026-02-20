@@ -5,13 +5,21 @@
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+<<<<<<< HEAD
 pip install -r docs/requirements.txt
+=======
+pip install -r requirements.txt
+>>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
 ```
 
 2. Build HTML:
 
 ```bash
+<<<<<<< HEAD
 sphinx-build -b html docs docs/_build/html
+=======
+make html
+>>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
 # Output is in _build/html
 ```
 
