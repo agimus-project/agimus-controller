@@ -14,10 +14,10 @@ def plot_mpc(args) -> None:
     bag_file_path = Path(args.bag_file_path)
     delete_tmp_srdf = False
     if "panda" in bag_file_path.stem:
-        franka_pkg = Path(get_package_share_directory("franka_description"))
-        franka_urdf_path = franka_pkg / "robots" / "fer" / "fer.urdf.xacro"
-        franka_urdf = xacro.process_file(franka_urdf_path).toxml()
-        franka_srdf_path = franka_pkg / "robots" / "fer" / "fer.srdf"
+        agimus_franka_pkg = Path(get_package_share_directory("agimus_franka_description"))
+        agimus_franka_urdf_path = agimus_franka_pkg / "robots" / "fer" / "fer.urdf.xacro"
+        agimus_franka_urdf = xacro.process_file(agimus_franka_urdf_path).toxml()
+        agimus_franka_srdf_path = agimus_franka_pkg / "robots" / "fer" / "fer.srdf"
         moving_joint_names = [
             "fer_joint1",
             "fer_joint2",
@@ -28,9 +28,9 @@ def plot_mpc(args) -> None:
             "fer_joint7",
         ]
         params = RobotModelParameters(
-            robot_urdf=franka_urdf,
+            robot_urdf=agimus_franka_urdf,
             env_urdf=None,
-            srdf=franka_srdf_path,
+            srdf=agimus_franka_srdf_path,
             free_flyer=False,
             armature=np.array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]),
             moving_joint_names=moving_joint_names,
