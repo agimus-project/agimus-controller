@@ -13,6 +13,13 @@ jobs:
           - {ROS_DISTRO: jazzy}
           - {ROS_DISTRO: kilted}
           - {ROS_DISTRO: rolling}
+    env:
+      UPSTREAM_WORKSPACE: |
+        github:agimus-project/agimus-msgs#main
+        github:agimus-project/agimus-franka-description#main
+        github:agimus-project/colmpc#main
+        github:gepetto/example-robot-data#devel
+        github:machines-in-motion/mim_solvers#devel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
