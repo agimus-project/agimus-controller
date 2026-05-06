@@ -38,6 +38,8 @@ from agimus_controller.warm_start_shift_previous_solution import (
 )
 from agimus_controller.factory.robot_model import RobotModels, RobotModelParameters
 
+import crocoddyl_plotter
+
 
 from agimus_controller_ros.ros_utils import (
     mpc_msg_to_weighted_traj_point,
@@ -48,7 +50,11 @@ from agimus_controller_ros.ros_utils import (
 )
 
 
-from agimus_controller.trajectory import TrajectoryBuffer, TrajectoryPoint
+from agimus_controller.trajectory import (
+    ConstantTrajectoryBuffer,
+    TrajectoryBuffer,
+    TrajectoryPoint,
+)
 from agimus_controller_ros.agimus_controller_parameters import agimus_controller_params
 
 
@@ -157,7 +163,13 @@ class AgimusController(Node, RobotModelsMixin):
         self.param_listener = agimus_controller_params.ParamListener(self)
         self.params = self.param_listener.get_params()
         self.params.ocp.armature = np.array(self.params.ocp.armature)
-        self.traj_buffer = TrajectoryBuffer(self.params.ocp.dt_factor_n_seq)
+        use_constant_buffer = (
+            self.declare_parameter("use_constant_buffer", False)
+            .get_parameter_value()
+            .bool_value
+        )
+        buffer_cls = ConstantTrajectoryBuffer if use_constant_buffer else TrajectoryBuffer
+        self.traj_buffer = buffer_cls(self.params.ocp.dt_factor_n_seq)
         self.params.collision_pairs = [
             (
                 self.params.get_entry(collision_pair_name).first,
@@ -534,6 +546,7 @@ class AgimusController(Node, RobotModelsMixin):
             self.ocp_x0_pub.publish(self.sensor_msg)
             mpc_debug_msg = mpc_debug_data_to_msg(self.mpc.mpc_debug_data)
             self.mpc_debug_pub.publish(mpc_debug_msg)
+        
 
 
 def main(args=None) -> None:
