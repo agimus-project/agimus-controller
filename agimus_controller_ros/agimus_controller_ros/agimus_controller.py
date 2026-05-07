@@ -38,8 +38,6 @@ from agimus_controller.warm_start_shift_previous_solution import (
 )
 from agimus_controller.factory.robot_model import RobotModels, RobotModelParameters
 
-import crocoddyl_plotter
-
 
 from agimus_controller_ros.ros_utils import (
     mpc_msg_to_weighted_traj_point,
