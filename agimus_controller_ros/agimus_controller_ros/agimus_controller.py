@@ -545,7 +545,6 @@ class AgimusController(Node, RobotModelsMixin):
             self.ocp_x0_pub.publish(self.sensor_msg)
             mpc_debug_msg = mpc_debug_data_to_msg(self.mpc.mpc_debug_data)
             self.mpc_debug_pub.publish(mpc_debug_msg)
-        
 
 
 def main(args=None) -> None:
