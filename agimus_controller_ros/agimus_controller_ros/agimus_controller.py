@@ -163,12 +163,11 @@ class AgimusController(Node, RobotModelsMixin):
         self.param_listener = agimus_controller_params.ParamListener(self)
         self.params = self.param_listener.get_params()
         self.params.ocp.armature = np.array(self.params.ocp.armature)
-        use_constant_buffer = (
-            self.declare_parameter("use_constant_buffer", False)
-            .get_parameter_value()
-            .bool_value
+        buffer_cls = (
+            ConstantTrajectoryBuffer
+            if self.params.trajectory_buffer == "constant"
+            else TrajectoryBuffer
         )
-        buffer_cls = ConstantTrajectoryBuffer if use_constant_buffer else TrajectoryBuffer
         self.traj_buffer = buffer_cls(self.params.ocp.dt_factor_n_seq)
         self.params.collision_pairs = [
             (
