@@ -75,7 +75,7 @@ agimus_controller_params:
     default_value: "standard"
     description: "Trajectory buffer strategy. 'standard': sliding FIFO window (trajectory following). 'constant': always replicate the latest point (reactive teleoperation)."
     validation:
-      one_of<>: ["standard", "constant"]
+      one_of<>: [["standard", "constant"]]
   rate:
     type: double
     default_value: 100.0
