@@ -2,7 +2,7 @@
 import numpy as np
 import time
 import os
-import resource_retriever as r
+import resource_retriever
 from functools import partial
 
 import rclpy
@@ -48,7 +48,11 @@ from agimus_controller_ros.ros_utils import (
 )
 
 
-from agimus_controller.trajectory import TrajectoryBuffer, TrajectoryPoint
+from agimus_controller.trajectory import (
+    ConstantTrajectoryBuffer,
+    TrajectoryBuffer,
+    TrajectoryPoint,
+)
 from agimus_controller_ros.agimus_controller_parameters import agimus_controller_params
 
 
@@ -132,6 +136,21 @@ class RobotModelsMixin:
             self.destroy_subscription(self.subscriber_environment_description)
 
     def ros_robot_ready(self) -> bool:
+        if self.robot_description_msg is None:
+            self.get_logger().warn(
+                "Waiting for robot descriptions...",
+                throttle_duration_sec=5.0,
+            )
+        if self.environment_msg is None:
+            self.get_logger().warn(
+                "Waiting for environment description...",
+                throttle_duration_sec=5.0,
+            )
+        if self.robot_srdf_description_msg is None:
+            self.get_logger().warn(
+                "Waiting for robot SRDF description...",
+                throttle_duration_sec=5.0,
+            )
         return self.q0 is not None
 
     def create_robot_models(self, **robot_model_parameters_kwargs) -> None:
@@ -157,7 +176,12 @@ class AgimusController(Node, RobotModelsMixin):
         self.param_listener = agimus_controller_params.ParamListener(self)
         self.params = self.param_listener.get_params()
         self.params.ocp.armature = np.array(self.params.ocp.armature)
-        self.traj_buffer = TrajectoryBuffer(self.params.ocp.dt_factor_n_seq)
+        buffer_cls = (
+            ConstantTrajectoryBuffer
+            if self.params.trajectory_buffer == "constant"
+            else TrajectoryBuffer
+        )
+        self.traj_buffer = buffer_cls(self.params.ocp.dt_factor_n_seq)
         self.params.collision_pairs = [
             (
                 self.params.get_entry(collision_pair_name).first,
@@ -328,7 +352,7 @@ class AgimusController(Node, RobotModelsMixin):
         if yaml_file == "":
             yaml_file = OCPCrocoGeneric.get_default_yaml_file("ocp_goal_reaching.yaml")
         else:
-            yaml_file = r.get_filename(yaml_file, use_protocol=False)
+            yaml_file = resource_retriever.get_filename(yaml_file, use_protocol=False)
         self.get_logger().info(f"Loading OCP definition file {yaml_file}")
         self.ocp = OCPCrocoGeneric(self.robot_models, self.ocp_params, yaml_file)
 
@@ -419,10 +443,6 @@ class AgimusController(Node, RobotModelsMixin):
             return
 
         if not self.ros_robot_ready():
-            self.get_logger().warn(
-                "Waiting for robot descriptions...",
-                throttle_duration_sec=5.0,
-            )
             return
 
         if self.mpc is None:
