@@ -252,10 +252,7 @@ class TestRobotModelsAgainstExampleRobotData(unittest.TestCase):
             geom_obj.name
             for geom_obj in self.robot_models.collision_model.geometryObjects
         ]
-        for geom_obj_name, geom_obj_name_test in zip(
-            geom_obj_names, geom_obj_names_test
-        ):
-            self.assertEqual(geom_obj_name, geom_obj_name_test)
+        self.assertEqual(geom_obj_names, geom_obj_names_test)
 
         geom_obj_types_test = [
             coal.Box,
@@ -418,10 +415,7 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             for geom_obj in self.robot_models.collision_model.geometryObjects
         ]
 
-        for geom_obj_name, geom_obj_name_test in zip(
-            geom_obj_names, geom_obj_names_test
-        ):
-            self.assertEqual(geom_obj_name, geom_obj_name_test)
+        self.assertEqual(geom_obj_names, geom_obj_names_test)
 
         geom_obj_types_test = [
             coal.Box,
