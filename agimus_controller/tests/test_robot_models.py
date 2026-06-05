@@ -28,7 +28,9 @@ except (ModuleNotFoundError, ImportError) as e:
     AMENT_AVAILABLE = False
 if AMENT_AVAILABLE:
     try:
-        FRANKA_DESCRIPTION_PATH = get_package_share_directory("agimus_franka_description")
+        FRANKA_DESCRIPTION_PATH = get_package_share_directory(
+            "agimus_franka_description"
+        )
         environ["AMENT_PREFIX_PATH"] += pathsep + FRANKA_DESCRIPTION_PATH
         FRANKA_DESCRIPTION_AVAILABLE = True
     except (OSError, PackageNotFoundError) as e:
@@ -250,10 +252,7 @@ class TestRobotModelsAgainstExampleRobotData(unittest.TestCase):
             geom_obj.name
             for geom_obj in self.robot_models.collision_model.geometryObjects
         ]
-        for geom_obj_name, geom_obj_name_test in zip(
-            geom_obj_names, geom_obj_names_test
-        ):
-            self.assertEqual(geom_obj_name, geom_obj_name_test)
+        self.assertEqual(geom_obj_names, geom_obj_names_test)
 
         geom_obj_types_test = [
             coal.Box,
@@ -397,6 +396,7 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             "fer_rightfinger_1",
             "fer_rightfinger_2",
             "fer_rightfinger_3",
+            "obstacle1_capsule_0",
             "fer_link0_sc_capsule_0",
             "fer_link1_sc_capsule_0",
             "fer_link2_sc_capsule_0",
@@ -409,17 +409,13 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             "fer_hand_sc_capsule_1",
             "fer_link7_sc_capsule_0",
             "fer_link7_sc_capsule_1",
-            "obstacle1_capsule_0",
         ]
         geom_obj_names = [
             geom_obj.name
             for geom_obj in self.robot_models.collision_model.geometryObjects
         ]
 
-        for geom_obj_name, geom_obj_name_test in zip(
-            geom_obj_names, geom_obj_names_test
-        ):
-            self.assertEqual(geom_obj_name, geom_obj_name_test)
+        self.assertEqual(geom_obj_names, geom_obj_names_test)
 
         geom_obj_types_test = [
             coal.Box,
