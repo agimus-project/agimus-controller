@@ -1,5 +1,5 @@
 import numpy as np
-import hppfcl
+import coal
 import pinocchio as pin
 
 import meshcat
@@ -22,11 +22,11 @@ BLACK = np.array([0, 0, 0, 0.5])
 BLACK_FULL = np.array([0, 0, 0, 1.0])
 
 
-def get_transform(T_: hppfcl.Transform3f):
-    """Returns a np.ndarray instead of a pin.SE3 or a hppfcl.Transform3f
+def get_transform(T_: coal.Transform3f):
+    """Returns a np.ndarray instead of a pin.SE3 or a coal.Transform3f
 
     Args:
-        T_ (hppfcl.Transform3f): transformation to change into a np.ndarray. Can be a pin.SE3 as well
+        T_ (coal.Transform3f): transformation to change into a np.ndarray. Can be a pin.SE3 as well
 
     Raises:
         NotADirectoryError: _description_
@@ -35,7 +35,7 @@ def get_transform(T_: hppfcl.Transform3f):
         _type_: _description_
     """
     T = np.eye(4)
-    if isinstance(T_, hppfcl.Transform3f):
+    if isinstance(T_, coal.Transform3f):
         T[:3, :3] = T_.getRotation()
         T[:3, 3] = T_.getTranslation()
     elif isinstance(T_, pin.SE3):
