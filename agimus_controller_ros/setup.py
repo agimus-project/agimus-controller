@@ -31,7 +31,7 @@ setup(
     version="0.0.0",
     packages=["agimus_controller_ros"],
     package_dir={},
-    install_requires=["setuptools"],
+    install_requires=["agimus_controller", "setuptools"],
     zip_safe=True,
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),

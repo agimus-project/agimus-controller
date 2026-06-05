@@ -6,7 +6,7 @@ setup(
     name=package_name,
     version="0.0.0",
     packages=find_packages(exclude=["tests"]),
-    install_requires=["setuptools"],
+    install_requires=["agimus_controller", "setuptools"],
     zip_safe=True,
     maintainer="Guilhem Saurel",
     maintainer_email="guilhem.saurel@laas.fr",
