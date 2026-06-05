@@ -53,5 +53,7 @@ setup(
             "mpc_plot_node = agimus_controller_ros.mpc_plot_node:main",
         ],
     },
-    tests_require=["pytest"],
+    extras_require={
+        "test": ["pytest"],
+    },
 )

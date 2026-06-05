@@ -12,5 +12,7 @@ setup(
     maintainer_email="guilhem.saurel@laas.fr",
     description="Example package using visualizers like meshcat and matplotlib to debug the agimus_controller MPCs",
     license="BSD-2",
-    tests_require=["pytest"],
+    extras_require={
+        "test": ["pytest"],
+    },
 )
