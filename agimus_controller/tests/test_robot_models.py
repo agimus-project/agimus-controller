@@ -396,6 +396,7 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             "fer_rightfinger_1",
             "fer_rightfinger_2",
             "fer_rightfinger_3",
+            "obstacle1_capsule_0",
             "fer_link0_sc_capsule_0",
             "fer_link1_sc_capsule_0",
             "fer_link2_sc_capsule_0",
@@ -408,7 +409,6 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             "fer_hand_sc_capsule_1",
             "fer_link7_sc_capsule_0",
             "fer_link7_sc_capsule_1",
-            "obstacle1_capsule_0",
         ]
         geom_obj_names = [
             geom_obj.name
