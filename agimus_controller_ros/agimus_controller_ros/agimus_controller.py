@@ -48,7 +48,11 @@ from agimus_controller_ros.ros_utils import (
 )
 
 
-from agimus_controller.trajectory import TrajectoryBuffer, TrajectoryPoint
+from agimus_controller.trajectory import (
+    ConstantTrajectoryBuffer,
+    TrajectoryBuffer,
+    TrajectoryPoint,
+)
 from agimus_controller_ros.agimus_controller_parameters import agimus_controller_params
 
 
@@ -172,7 +176,12 @@ class AgimusController(Node, RobotModelsMixin):
         self.param_listener = agimus_controller_params.ParamListener(self)
         self.params = self.param_listener.get_params()
         self.params.ocp.armature = np.array(self.params.ocp.armature)
-        self.traj_buffer = TrajectoryBuffer(self.params.ocp.dt_factor_n_seq)
+        buffer_cls = (
+            ConstantTrajectoryBuffer
+            if self.params.trajectory_buffer == "constant"
+            else TrajectoryBuffer
+        )
+        self.traj_buffer = buffer_cls(self.params.ocp.dt_factor_n_seq)
         self.params.collision_pairs = [
             (
                 self.params.get_entry(collision_pair_name).first,
