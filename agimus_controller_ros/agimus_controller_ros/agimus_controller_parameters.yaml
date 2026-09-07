@@ -70,6 +70,12 @@ agimus_controller_params:
     type: bool
     default_value: False
     description: "When True, the OCP result is always published with a delay of dt but OCP uses a delay compensation. When False, the result is published as soon as possible."
+  apply_knot:
+    type: int
+    default_value: 1
+    description: "MPC command-delay compensation (Subburaman & Stasse, 'Delay Robust MPC for Whole-Body Torque Control of Humanoids', Humanoids 2024): publish the OCP's own predicted knot k instead of knot 0, so the control matches the time it will actually act (~k*dt in the future). The solve still starts from the real measurement x_real -- only the *published* knot changes -- so this does NOT close the unstable re-solve-from-prediction loop that constant_delay does. 0 = stock behaviour. Keep constant_delay OFF when using this."
+    validation:
+      gt_eq<>: 0
   trajectory_buffer:
     type: string
     default_value: "standard"
