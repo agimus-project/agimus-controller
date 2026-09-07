@@ -462,20 +462,23 @@ class AgimusController(Node, RobotModelsMixin):
             xk = ocp_res.states[k]
             self.np_sensor_msg.joint_state.position = np.asarray(xk[:nq])
             self.np_sensor_msg.joint_state.velocity = np.asarray(xk[nq : nq + nv])
-            if k + 1 < len(ocp_res.states):
-                # Next knot x_{k+1}, carried on Control.next_states for the
-                # LFC's reference interpolation. Stamped one OCP period after
-                # this cycle's initial_state: the LFC derives the actual
-                # interpolation period from the two stamps, it does not
-                # assume a fixed one.
-                x_next = sensor_msg_to_numpy(self.sensor_msg)
-                x_next.stamp = self.np_sensor_msg.stamp + Duration(
-                    nanoseconds=round(self.ocp_params.dt * 1e9)
-                )
-                xkn = ocp_res.states[k + 1]
-                x_next.joint_state.position = np.asarray(xkn[:nq])
-                x_next.joint_state.velocity = np.asarray(xkn[nq : nq + nv])
-                next_states = [x_next]
+        if k + 1 < len(ocp_res.states):
+            # Next knot x_{k+1}, carried on Control.next_states for the LFC's
+            # reference interpolation -- independent of apply_knot/k: even at
+            # k=0 (initial_state == the raw measurement), interpolating
+            # towards the OCP's own states[1] smooths the staircase reference
+            # between MPC solves, decoupled from the knot-shift delay comp
+            # (paper's u2 without u1). Stamped one OCP period after this
+            # cycle's initial_state: the LFC derives the actual interpolation
+            # period from the two stamps, it does not assume a fixed one.
+            x_next = sensor_msg_to_numpy(self.sensor_msg)
+            x_next.stamp = self.np_sensor_msg.stamp + Duration(
+                nanoseconds=round(self.ocp_params.dt * 1e9)
+            )
+            xkn = ocp_res.states[k + 1]
+            x_next.joint_state.position = np.asarray(xkn[:nq])
+            x_next.joint_state.velocity = np.asarray(xkn[nq : nq + nv])
+            next_states = [x_next]
         ctrl_msg = lfc_py_types.Control(
             feedback_gain=ocp_res.ricatti_gains[k],
             feedforward=ocp_res.feed_forward_terms[k].reshape(nv, 1),
