@@ -24,7 +24,8 @@ The plotting utilities now automatically dump plot data and metadata to a JSON f
 - Example:
 ```python
 import json
-with open('my_plot_plotdata.json') as f:
+
+with open("my_plot_plotdata.json") as f:
     data = json.load(f)
 # data['time'], data['values'], data['labels'], ...
 ```
