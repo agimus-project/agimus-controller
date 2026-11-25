@@ -140,7 +140,7 @@ datas contain such members. If our code is built with `-march=native` but
 links the generic pinocchio from `/opt/ros`, the two sides disagree on
 struct layout and the process crashes or computes garbage. Configuration C
 is therefore only valid when every Eigen user in the process (pinocchio,
-coal, crocoddyl, mim_solvers, colmpc, force_feedback_mpc, crocoddyl_yaml,
+coal, crocoddyl, mim_solvers, colmpc, force_feedback_mpc, crocoddyl-toml,
 this package) is built from source with the same flags, in a separate
 install prefix. It runs at the end of P4, P7 and P8, and in T10.7, not per
 task. It is a test configuration only: shipped builds stay generic x86-64

@@ -47,7 +47,7 @@ The loop is subagent-driven development: brief, implement, review, record.
 ## Brief template
 
 ```
-Task T<id>: <title>   (repo: <agimus_controller | crocoddyl_yaml>)
+Task T<id>: <title>   (repo: <agimus_controller | crocoddyl_toml>)
 Goal: <one sentence>
 Read first: doc/design.md#<section>, doc/rt_safety.md (if any @rt code),
   <Python sources with line ranges>, <Python tests>
@@ -84,7 +84,8 @@ The implementer stops, commits nothing that is half-done, and reports when:
 
 1. An `Rt*` test fails inside third-party code (rt_safety.md, third-party
    section).
-2. Progress needs an edit to an existing crocoddyl_yaml `.schema` file.
+2. Progress needs a TOML key, type or behaviour that crocoddyl_toml.md does
+   not describe.
 3. The Python behaviour is ambiguous or looks wrong, and design.md's
    behaviour-change table does not cover it.
 4. A dependency or header is missing, or the installed API differs from what

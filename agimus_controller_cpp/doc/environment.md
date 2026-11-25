@@ -16,8 +16,7 @@ glibc 2.43, GCC 15.2.0, CMake 4.2.3, Python 3.14.4.
 | coal | 3.0.3 | `/opt/ros/lyrical/lib/x86_64-linux-gnu/cmake/coal` | P3 |
 | mim_solvers | 0.3.0 | built in this workspace: `install/mim_solvers/lib/cmake/mim_solvers` | P4 |
 | example-robot-data | (workspace) | built in this workspace: `install/example_robot_data` | P3 |
-| yaml-cpp | system | `/usr/lib/x86_64-linux-gnu/cmake/yaml-cpp` | P5 |
-| yaml-schema-cpp | (source) | `src/yaml-schema-cpp`, not built yet | P5 |
+| toml++ | 3.4.0 | `libtomlplusplus-dev` in the apt index, **not installed**; `tomlplusplus` in nixpkgs | P5 |
 | doctest | **MISSING** | `doctest-dev` 2.4.12 is in the apt index, but the apt mirror (`repo.pal-local`) is unreachable from the container without the PAL network | P1 |
 | colmpc (C++) | **MISSING** | no CMake config found | P6 |
 | force_feedback_mpc (C++) | **MISSING** | no CMake config found | P8 |

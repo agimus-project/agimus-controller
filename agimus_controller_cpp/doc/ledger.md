@@ -53,6 +53,29 @@ design.md.
   the RT-check definitions are `$<BUILD_INTERFACE:...>`, so the installed
   target does not inherit them. Configurations A and B green (67 ctests),
   in the container (doctest shim) and in a nix shell (real doctest).
-- Open, for the user: the crocoddyl_yaml type-registry split; B4 (a
-  `control_grav` residual with a reference is not planned); B7 (keep the
-  rolling buffer or update every node); YAML or TOML (maintainer question).
+- Open, for the user: B4 (a `control_grav` residual with a reference is
+  not planned); B7 (keep the rolling buffer or update every node).
+
+## Ruling R2 revised: crocoddyl-toml, 2026-11-25
+- After the gepetto maintainers' TOML comment on PR #334, the user decided:
+  a new crocoddyl-toml library in its own repository; a TOML-native format
+  (not crocoddyl_yaml's schema); validation by typed C++ structs;
+  crocoddyl_yaml dropped (not upgraded, no parity tests against it).
+- Supersedes the review's crocoddyl_yaml items (jrl-cmakemodules update,
+  type registry inside crocoddyl_yaml): the registry moves to crocoddyl-toml.
+- crocoddyl_yaml (PepMS, December 2024) is acknowledged in
+  crocoddyl_toml.md as the design crocoddyl-toml starts from; its defects
+  became requirements.
+- Choices made while writing crocoddyl_toml.md (the user may veto):
+  the agimus keys move into an `[agimus]` table of the same file (they were
+  a separate file only because the crocoddyl_yaml schema was frozen);
+  colmpc dynamics are chosen explicitly (`colmpc_free_fwd`), not inferred
+  from the residuals as Python does; golden fixtures are TOML instead of
+  YAML (no yaml-cpp dependency left).
+- Repository: github.com/loco-3d/crocoddyl-toml (created empty by the
+  user). It follows the Gepetto packaging (jrl-cmakemodules as an installed
+  package, `package.xml`, gepetto/nix `mkFlakoboros` flake, example-adder's
+  CI), so R6's plain CMake applies to `CPP/` only. Its flake needs a
+  `pkgs/crocoddyl-toml.nix` in gepetto/nix (pull request, user approval).
+- Open: the license (none yet; crocoddyl is BSD-3-Clause); doctest or
+  Boost.Test (loco-3d maintainers); Python bindings later.
