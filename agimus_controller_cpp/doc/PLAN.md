@@ -70,7 +70,11 @@ Treat these as fixed. Changing one needs the user.
   translation unit must compile in under 2 GB of RAM (CI limit). Generic
   x86-64 (ISA flags only via T10.7, see R8). Tests use **doctest**, not GTest, because it is much
   lighter. Each test case is registered in CTest with
-  `doctest_discover_tests`.
+  `doctest_discover_tests`. Tests run first in a debug build, then in an
+  `-O3` build, both with the RT checks and `EIGEN_INITIALIZE_MATRICES_BY_NAN`
+  (configurations A and B). An `-O3 -march=native` run of the whole stack
+  (configuration C) runs at phase ends; it is a test, not a shipped build
+  ([doc/rt_safety.md#build-configurations](rt_safety.md#build-configurations)).
 - **R7 Git.** Atomic commits with short messages. No `Co-Authored-By` or
   "Generated with" lines. Never push.
 - **R8 Speed, measured.** The time of one `Mpc::run` tick (median, p99, max)
@@ -137,6 +141,17 @@ P5–P6 (crocoddyl_yaml) can run in parallel with P2–P4.
 - **T1.1 (M) Skeleton.** `CPP/CMakeLists.txt`, `CPP/package.xml`, one
   library target `agimus_controller_cpp` (alias
   `agimus_controller_cpp::agimus_controller_cpp`) with a placeholder source,
+- **T0.4 (H) Bug audit of the Python sources.** Before porting, read every
+  module in the R1 scope (`PY/` files listed in design.md's Python to C++
+  map, plus `PY/ocp/ocp_croco_generic.py` and the force-feedback modules)
+  looking for obvious logical bugs, as described in
+  [doc/supervision.md#bug-reports](supervision.md#bug-reports). B1–B7 were
+  found this way while planning; this task finishes the job.
+  **Done when** the ledger has one entry per suspected bug (file:line, what
+  happens, a minimal input, the proposed fix), the user has decided on each,
+  and the accepted ones are rows of design.md's behaviour-change table.
+  Can run in parallel with P1; must finish before the P2–P8 task that ports
+  the affected code.
   install and export of the target and headers (`include/agimus_controller/`),
   `BUILD_TESTING` with doctest, and the `AGIMUS_CONTROLLER_RT_CHECKS` option
   from rt_safety.md. The doctest `main` is compiled once, in the test-support
@@ -213,7 +228,10 @@ Read [doc/design.md#ocp](design.md#ocp) and the warm-start and MPC sections.
   placement/translation/rotation/velocity residuals (fixed frame and frame
   from the trajectory). Sources: `PY/ocp_base_croco.py`,
   `PY/ocp/ocp_croco_generic.py:153-433,713-892`. Port
-  `PYT/test_ocp_croco_base.py` (its `.pkl` becomes golden set G4).
+  `PYT/test_ocp_croco_base.py` (its `.pkl` becomes golden set G4). Includes
+  the zero-weight rule (B10, design.md Cost updaters) with its two tests:
+  toggling `CostItem::active` every tick is RT-safe, and gives the same
+  solution as disabling the cost at setup.
 - **T4.3 (M) Goal-reaching builder.** `build_goal_reaching_models` in
   `ocp_builders.hpp/.cpp`, port of `PY/ocp/ocp_croco_goal_reaching.py`. Port
   `PYT/test_ocp_croco_goal_reaching.py` against golden set G5.
@@ -247,6 +265,9 @@ Read [doc/design.md#ocp](design.md#ocp) and the warm-start and MPC sections.
 **P4 done when** all tests are green, or the only red ones are third-party
 RT failures that have been reported to the user, and the T4.7 baseline is
 recorded.
+
+  Time with `steady_clock` in `std::chrono::nanoseconds`. Run on a desktop
+  or server CPU, not a laptop (design.md, Benchmark).
 
 ### P5 crocoddyl_yaml upgrade (repo `CY/`)
 
@@ -321,10 +342,13 @@ repo is not migrated to doctest (doctest is the rule for `CPP/` only). See [doc/
   (f_des, f_weight, active_contact, tau_grav_weight) and the update of the
   IAM bounds, and handle the state size nx + nc. Source
   `PY/ocp/ocp_croco_generic_force_feedback.py`.
-- **T8.3 (M) Force-feedback warm start and rolling buffer.**
+- **T8.3 (H) Force-feedback warm start and rolling buffer.**
   `WarmStartShiftPreviousSolutionForceFeedback`, and the
-  `expect_rolling_buffer` mode (`ShootingProblem::circularAppend`). Source
-  `PY/warm_start_shift_previous_solution_force_feedback.py`.
+  `expect_rolling_buffer` mode as specified in design.md's B7 note (rotate
+  only when the buffer advanced by one node, two-argument `circularAppend`,
+  `Ocp::reset`). Sources
+  `PY/warm_start_shift_previous_solution_force_feedback.py` and
+  `PY/ocp/ocp_croco_generic.py:865-882`.
 - **T8.4 (M) Parity.** Golden set G9 plus `Rt*` tests.
 
 ### P9 Hardening and handover
@@ -367,7 +391,10 @@ Golden and RT tests stay green throughout.
 - **T10.4 (H) Threads.** Measure the tick with `n_threads` 1, 2, 4 and the
   number of cores, setting the thread count explicitly (some builds default
   to many OpenMP threads; also set `OMP_THREAD_LIMIT`). Recommend a default
-  per OCP size.
+  per OCP size. Then evaluate the memory layout for threads (design.md,
+  Performance rule 6): allocate each node's datas from the thread that
+  computes it, or pad them to separate cache lines, and keep the change only
+  if it meets R8. Measure first; do not restructure before the numbers.
 - **T10.5 (H) Hot spots in dependencies.** For each third-party hot spot
   from T10.1 (e.g. collision distance, frame kinematics, the QP), give the
   user the numbers and a proposed patch. Implement only the approved ones,
@@ -423,3 +450,8 @@ Golden and RT tests stay green throughout.
     not an ancestor of the `main` commit being ported (`630372d`).
 - crocoddyl_yaml was written between 2024-12-16 and 2024-12-20, against
   crocoddyl 2.x (`boost::shared_ptr` API) and pinocchio 3.x.
+- crocoddyl 3.2's `CostModelSum::changeCostStatus` allocates (a
+  `std::set<std::string>`), and `ConstraintModelManager::changeConstraintStatus`
+  changes `ng` (design.md, B10).
+- crocoddyl 3.2's one-argument `ShootingProblem::circularAppend` creates a
+  new data on every call (design.md, B7).

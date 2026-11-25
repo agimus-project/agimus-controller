@@ -45,6 +45,18 @@ Shorthands (`PY/`, `PYT/`, `ROS/`, `CPP/`, `CY/`) are defined in
 - Python `None` ("not provided") has no C++ equivalent. Every vector exists
   and is sized at setup. An absent end effector is one that is not in
   `ee_inputs`. An optional setting (`max_solve_time`) is `std::optional`.
+- **Time is `std::chrono`.** Every time point, duration, dt and timeout is a
+  `std::chrono::nanoseconds` (integer, exact). Convert to `double` seconds
+  only at a boundary that requires it, with
+  `std::chrono::duration<double>(d).count()`. The boundaries are a
+  crocoddyl model's `dt`, CSQP's `max_solve_time` and a ROS message
+  field. Sums of timesteps stay in nanoseconds, so they are exact.
+  - Clock: `std::chrono::steady_clock`, which is monotonic and has
+    nanosecond resolution on Linux (`CLOCK_MONOTONIC`). Do not use
+    `high_resolution_clock`: libstdc++ aliases it to `system_clock`, which
+    jumps when the wall clock is adjusted.
+  - Read the clock with `steady_clock::now()`, which does not allocate or
+    block; it is allowed in `@rt` code.
 
 ## Python to C++ map
 
@@ -95,7 +107,7 @@ struct EndEffectorInput {            // agimus_msgs/MpcEEInput
 
 struct WeightedTrajectoryPoint {     // agimus_msgs/MpcInput
   int id = -1;
-  std::int64_t time_ns = 0;
+  std::chrono::nanoseconds time{0};
   Eigen::VectorXd q;                 // size nq
   Eigen::VectorXd w_q;               // size nv: the state residual lives in the tangent space
   Eigen::VectorXd qdot, w_qdot;      // size nv
@@ -106,7 +118,7 @@ struct WeightedTrajectoryPoint {     // agimus_msgs/MpcInput
 };
 
 struct RobotState {                  // measured state given to Mpc::run
-  std::int64_t time_ns = 0;
+  std::chrono::nanoseconds time{0};
   Eigen::VectorXd q, v, a;           // a defaults to zero, as in the ROS node
   Eigen::Vector3d contact_force = Eigen::Vector3d::Zero();  // force feedback only
 };
@@ -165,7 +177,10 @@ struct RobotState {                  // measured state given to Mpc::run
 
 - `OcpParams` holds the fields of `OCPParamsBaseCroco` (`PY/ocp_param_base.py:25-85`)
   with the same defaults, plus `use_filter_line_search` as a normal field
-  (behaviour change B8). `max_solve_time` is `std::optional<double>`.
+  (behaviour change B8). `dt`, `timesteps` and `total_time` are
+  `std::chrono::nanoseconds`, and `max_solve_time` is
+  `std::optional<std::chrono::nanoseconds>`. A parameter file gives
+  seconds; the loader converts with `std::chrono::round`.
   `void finalize()` computes `n_controls`, `timesteps` and `total_time`, and
   throws if `horizon_size != n_controls`.
 - `OcpResults`: `std::vector<Eigen::VectorXd> states, feed_forward_terms;
@@ -181,8 +196,8 @@ struct RobotState {                  // measured state given to Mpc::run
   - A reference is stored as the ROS node publishes it: a vector is n×1; an
     SE3 is 7×1 XYZQUAT (`pinocchio::SE3ToXYZQUAT`); a rotation is 3×3.
   - Residuals are `n_controls × nr`.
-- `MpcDebugData`: `ocp`, `reference_id`, and the four `duration_*_ns`
-  timers, measured with `std::chrono::steady_clock`.
+- `MpcDebugData`: `ocp`, `reference_id`, and the four `duration_*` timers
+  (`std::chrono::nanoseconds`), measured with `std::chrono::steady_clock`.
 
 ## Robot models
 
@@ -242,6 +257,9 @@ own object, because references differ per node.
   solves with `solver_iters` and `max_solve_time`, then copies the solver's
   xs, us and K into the results and, if `use_debug_data`, fills the debug
   data (`PY/ocp_base_croco.py:713-761`, `PY/ocp/ocp_croco_generic.py:827-853`).
+- `/// @rt void reset()` forgets the rolling-buffer position (B7), so the
+  next `set_reference_weighted_trajectory` updates every node. Call it
+  before a new initial solve.
 - `bool solve_without_limits(...)` takes the same arguments with 1000
   iterations and no timeout. It is the initial solve, so it is setup, not
   `@rt`.
@@ -316,6 +334,31 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   `kMissingTransform`. This is Python's assert at line 466.
 - Applying weights when the activation is not `ActivationModelWeightedQuad`
   does nothing for the weights (Python only defines `update` on WeightedQuad).
+- **Zero weight disables the cost (B10).** After writing the weights, the
+  updater sets the cost item inactive when its effective weight is zero:
+  - the cost item's scalar weight is 0 (`kCollisionWeight`), or
+  - every activation weight written by the rule is 0.
+
+  It sets the item active again as soon as one weight is non-zero. A zero
+  cost adds nothing to the value, gradient or Hessian, so the solution is
+  unchanged, but crocoddyl then skips its `calc`/`calcDiff`. Costs that are
+  zero in the OCP file (demo 08's terminal `state_reg`) are made inactive at
+  setup in the same way.
+  - **RT constraint:** crocoddyl 3.2's `CostModelSum::changeCostStatus`
+    allocates: it inserts into and erases from a `std::set<std::string>`,
+    and the call builds a `std::string`. The updater must therefore not
+    call it in the loop. It writes `CostItem::active` through the cached
+    `CostItem*` instead, which is what `calc`/`calcDiff` read.
+  - That leaves `CostModelSum::nr_` and the active/inactive name sets
+    stale. T4.2 must check, by a test that toggles an item every tick,
+    that nothing in the solve path reads them (an RT test plus a golden
+    comparison with the same cost disabled through `changeCostStatus` at
+    setup). If something does read them, stop (R3) and propose a crocoddyl
+    patch: a toggle by index that keeps `nr_` in sync and does not
+    allocate.
+  - Constraints are never toggled at run time: `changeConstraintStatus`
+    changes `ng`, which resizes the solver's workspace. A constraint has no
+    weight, so the rule does not apply to it.
 
 ### Builders (`ocp_builders.hpp`)
 
@@ -360,7 +403,7 @@ class WarmStart {
 
 `Mpc(std::shared_ptr<Ocp>, std::shared_ptr<WarmStart>, std::shared_ptr<TrajectoryBuffer>)`
 
-- `/// @rt Status run(const RobotState&, std::int64_t now_ns)` is
+- `/// @rt Status run(const RobotState&, std::chrono::nanoseconds now)` is
   `PY/mpc.py:33-67`:
   - return `kNotEnoughData` unless `buffer.has_horizon()` (B2);
   - set the references;
@@ -372,7 +415,7 @@ class WarmStart {
 
   Results are read with `ocp().results()`.
 - `/// @rt Status integrate(RobotState& state, const Eigen::VectorXd& u)`
-  advances q, v and `time_ns` by one dt (B1).
+  advances q, v and `time` by one dt (B1).
 - `/// @rt Status push_back(const WeightedTrajectoryPoint&)` forwards to the
   buffer.
 - `debug_data()`, `ocp()`, `buffer()`.
@@ -406,7 +449,16 @@ Hot-path rules, on top of the RT rules:
 5. **Leave solver internals alone.** Do not re-create models, datas or the
    problem after setup. Do not call `calc`/`calcDiff` outside the solver,
    except `Ocp::integrate` (one node).
-6. **Production builds:** `CMAKE_BUILD_TYPE=Release`,
+6. **One object per node, allocated separately.** Every node has its own
+   action model, differential model, cost sum, residuals and datas: no
+   object is shared between nodes. This is required for correctness (each
+   node has its own references) and is expected to help OpenMP, because
+   threads working on different nodes then write to different memory. A
+   further step is to allocate each node's datas from the thread that will
+   compute it (first touch), or with padding to separate cache lines. Do
+   this only if T10.4 measures a gain with `n_threads > 1`; it is not done
+   up front.
+7. **Production builds:** `CMAKE_BUILD_TYPE=Release`,
    `AGIMUS_CONTROLLER_RT_CHECKS=OFF`, generic x86-64. ISA-specific flags
    arrive only through T10.7. Never benchmark an RT-check build:
    `EIGEN_RUNTIME_NO_MALLOC` and the assertions it enables distort timings.
@@ -435,10 +487,20 @@ fails on time.
     agimus overhead (T10.2 target ≤ 2 %).
   - The Python `MPC.run` on the same problem, from a script next to the
     golden generator.
+- **Timing.** `std::chrono::steady_clock`, stored as
+  `std::chrono::nanoseconds`; converted to microseconds or milliseconds only
+  when the table is printed.
 - **Conditions.** Set `n_threads` explicitly and export
   `OMP_THREAD_LIMIT`; some builds default to one OpenMP thread per core. Run
   on a machine that is otherwise idle. `taskset` to one core is optional but
   recorded.
+- **Machine.** Numbers that decide anything (R8, T10.x) come from a desktop
+  or server CPU, never a laptop. Laptops throttle with temperature, and
+  their hybrid performance/efficiency cores make thread timings depend on
+  the scheduler. The supervisor asks the user for the machine (a
+  workstation such as miyanoura was offered by a reviewer; access goes
+  through whoever administers it). A laptop is fine for checking that
+  `bench_mpc` runs.
 
 ## Behaviour changes from Python
 
@@ -446,15 +508,66 @@ Every deliberate difference. A test covers each one, and the README lists them.
 
 | Id | Python | C++ |
 |---|---|---|
-| B1 | `PY/mpc.py:78`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt * 1e9` |
+| B1 | `PY/mpc.py:78`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt` (both are `std::chrono::nanoseconds`) |
 | B2 | `PY/mpc.py:39` checks `len < n_controls + 1`, but `horizon` needs `len > horizon_indexes[-1]` (larger when a factor > 1), so it asserts | checks `has_horizon()` and returns `kNotEnoughData` |
 | B3 | `PY/trajectory.py:448-451` raises `KeyError` when a frame is in only one point | a missing side counts as zero weights |
-| B4 | `ResidualModelControlGrav.update` sets a `reference` attribute that crocoddyl's class does not have (no effect) | only the weights are updated |
+| B4 | `ResidualModelControlGrav.update` sets a `reference` attribute that crocoddyl's class does not have (no effect) | only the weights are updated; see the note below the table |
 | B5 | `MPC.append_trajectory_points` calls `buffer.extend`, which does not exist | not ported; call `push_back` in a loop |
 | B6 | `ocp_traj_tracking_collision_avoidance.yaml` uses `collision_pair_id`, which the dataclass rejects | the converted file uses geometry names |
-| B7 | the rolling buffer (`circularAppend` of node 0) moves node 0's dt to the end, which is silently wrong when timesteps differ | setup throws if `expect_rolling_buffer` and timesteps are not all equal |
+| B7 | the rolling buffer (`PY/ocp/ocp_croco_generic.py:865-882`) has four defects, listed below the table | see below |
 | B8 | `use_filter_line_search` is a class attribute, not a dataclass field, so the constructor cannot set it | a normal field, default false |
 | B9 | `TrajectoryBuffer` grows without bound | fixed capacity; `push_back` returns `kBufferFull` |
+| B10 | a cost with zero weight is still evaluated | the updater disables it (see Cost updaters); same solution, less work |
+
+**B4, ControlGrav reference.** crocoddyl's `ResidualModelControlGrav` is
+`r = u - g(q)`. It has no reference, so Python's
+`obj.reference = robot_effort` creates a Python attribute that crocoddyl
+never reads. The effective Python behaviour is "regularise the torque
+around gravity compensation, and ignore `robot_effort`", and C++ keeps it,
+which keeps parity. If `robot_effort` is meant to be tracked around gravity
+compensation (`r = u - g(q) - u_ref`), that needs a new residual, which
+changes the solution compared with Python. It is not in this plan, and the
+user decides whether to add it. Until then, T7.1 rejects nothing, but the
+README says that `update` on `control_grav` updates only the weights.
+
+**B7, rolling buffer.** With `expect_rolling_buffer`, Python sets the
+references of every node on the first call. On each later call it rotates
+node 0 to the end (`circularAppend`) and sets the references of the new
+last node only. The defects:
+
+1. **dt moves with the node.** Node 0's dt goes to the end, which is wrong
+   when the timesteps are not all equal.
+2. **One node per tick is assumed, not checked.** Rotating is correct only
+   if, since the last tick, the buffer has advanced by exactly one node and
+   the points already in the horizon have not changed. It goes wrong when a
+   tick is skipped, when the MPC rate differs from `1 / dt`, when a
+   dt factor is greater than 1, or when the trajectory is replaced.
+3. **`_first_call` is never reset**, so after a reset (new initial solve,
+   cleared buffer) the nodes keep stale references.
+4. **The one-argument `circularAppend(model)` calls `model->createData()`
+   every tick**, which allocates (crocoddyl 3.2
+   `optctrl/shooting.hxx`). The solver also calls `resizeData()` on the next
+   solve, because `circularAppend` sets `is_updated_`.
+
+C++:
+
+- Setup throws if `expect_rolling_buffer` is set and a dt factor is not 1
+  (fixes 1). Equal factors greater than 1 are not enough: node 1 then sits
+  at buffer index 2, but the buffer advances by one point per tick.
+- `Ocp` remembers the buffer position of node 0 from the previous tick (the
+  `id` of the point used). It rotates only when the new node 0 is the old
+  node 1. Otherwise (first call, skipped tick, jump, reset) it updates every
+  node, exactly as without the rolling buffer (fixes 2 and 3). `Ocp::reset()`
+  forgets the position.
+- It rotates with the two-argument `circularAppend(model, data)`, passing
+  node 0's own data, so nothing is created (fixes 4). `RtOcp.set_reference...`
+  covers a rotation followed by a solve, so the `resizeData()` that the
+  solver then runs is proven allocation-free (same sizes), or goes red (R3).
+- Test: over 50 ticks with a skipped tick and a trajectory jump, the
+  references of every node equal those of an OCP without the rolling
+  buffer.
+- The user may still decide that the rolling buffer is not worth this
+  logic, and drop it in favour of updating every node (measured in T10.2).
 
 ## Golden files
 

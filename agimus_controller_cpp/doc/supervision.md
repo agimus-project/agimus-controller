@@ -20,7 +20,9 @@ The loop is subagent-driven development: brief, implement, review, record.
    - port or write the tests (from the Python tests or the golden files) and
      see them fail for the right reason;
    - implement until they pass;
-   - run the full package build and `ctest`;
+   - run the full package build and `ctest` in configuration A (debug),
+     then B (optimised); see
+     [rt_safety.md#build-configurations](rt_safety.md#build-configurations);
    - run `pre-commit run --files <changed files>`;
    - commit (R7).
 
@@ -57,6 +59,25 @@ Stop and report instead of guessing if: any stop condition in doc/supervision.md
 Build/test commands: <from doc/environment.md>
 ```
 
+## Bug reports
+
+Porting means reading every line, so the port is also a bug hunt. Whoever
+sees an obvious logical bug reports it, whether the bug is in the Python
+source, in our C++ code or in a dependency. Examples: a wrong unit
+conversion (B1), a check against the wrong bound (B2), a call to a method
+that does not exist (B5), state that is never reset (B7).
+
+- Do not port the bug silently, and do not fix it silently.
+- The report gives: file and line, what the code does, what it should do,
+  a minimal input that shows the difference, and a proposed fix.
+- The implementer sends it in its task report. The supervisor checks it,
+  then either records a ruling or asks the user. An accepted fix becomes a
+  new row of design.md's behaviour-change table, with its test.
+- A bug outside the task's files does not block the task. A bug that
+  changes what the task must produce is stop condition 3.
+
+T0.4 does this systematically, before the port starts.
+
 ## Stop conditions
 
 The implementer stops, commits nothing that is half-done, and reports when:
@@ -90,7 +111,9 @@ Each item is a yes/no question. A "no" is a finding.
   realistic sizes.
 - **Parity.** Every Python test of the module is ported (or the ledger says
   why not). Golden comparisons use the tolerances from design.md. Each
-  behaviour change B1–B9 the code touches has its test.
+  behaviour change in design.md's table that the code touches has its test.
+- **Bugs.** Every bug the implementer noticed is in its report (see Bug
+  reports), and none was ported or fixed silently.
 - **Setup errors.** Bad input throws with a message naming the item. There
   is a test for each throw ported from a Python assert or `ValueError`.
 - **Simplicity.** No speculative options, templates or abstractions beyond
@@ -102,7 +125,11 @@ Each item is a yes/no question. A "no" is a finding.
   explains it. An optimization stays only with before/after numbers that
   meet R8.
 - **Build.** Plain CMake, no new dependency outside the brief, warnings
-  clean, pre-commit clean, no `-march` outside T10.7.
+  clean, pre-commit clean, green in configurations A and B, no `-march`
+  outside configuration C and T10.7.
+- **Time.** Durations and time points are `std::chrono::nanoseconds`, read
+  from `steady_clock`, and converted to `double` only at a crocoddyl, CSQP
+  or ROS boundary (design.md, Conventions).
 - **Git.** Atomic commits, short messages, no AI attribution lines, nothing
   pushed.
 

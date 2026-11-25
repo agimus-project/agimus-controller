@@ -108,7 +108,43 @@ same definitions and every translation unit agrees):
 - `-UNDEBUG`, because Eigen's checks are `eigen_assert`s and need
   assertions on. RT-check builds are therefore not release builds.
   Production and benchmark builds set the option OFF (design.md,
-  Performance section).
+  Performance section);
+- `EIGEN_INITIALIZE_MATRICES_BY_NAN`, which fills every Eigen matrix and
+  vector created in our translation units with NaN. A value that is read
+  before it is written then turns into NaN and fails a comparison, instead
+  of silently holding whatever was in memory (often 0, which hides the
+  bug). Code that needs zeros must call `setZero()` or `Zero()`.
+  Precompiled libraries (pinocchio, crocoddyl) are not affected.
+
+Defining these macros in our translation units only means that Eigen's
+inline functions differ between our code and the precompiled libraries.
+That is harmless for these three macros (they do not change object layout),
+but do not add a macro that does, such as `EIGEN_MAX_ALIGN_BYTES` or
+`EIGEN_DONT_VECTORIZE`.
+
+### Build configurations
+
+Every task runs the tests in configurations A and B, in that order. A task
+is not done until both are green.
+
+| Config | Flags | Catches |
+|---|---|---|
+| A, debug | `CMAKE_BUILD_TYPE=Debug`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | logic errors with full assertions and readable backtraces; run first |
+| B, optimised | `CMAKE_BUILD_TYPE=Release` (`-O3`), `AGIMUS_CONTROLLER_RT_CHECKS=ON` | bugs that only appear under optimisation: undefined behaviour, aliasing, uninitialised reads; also checks that the RT tests hold when the optimiser elides or merges allocations |
+| C, native | B plus `-march=native`, for **the whole stack** | vectorisation and alignment bugs with AVX |
+
+Configuration C needs care, because of what happened with moto's aligned
+maps. With AVX, Eigen aligns fixed-size objects such as `Matrix4d` and 6×6
+matrices to 32 bytes instead of 16. `pinocchio::Data` and the crocoddyl
+datas contain such members. If our code is built with `-march=native` but
+links the generic pinocchio from `/opt/ros`, the two sides disagree on
+struct layout and the process crashes or computes garbage. Configuration C
+is therefore only valid when every Eigen user in the process (pinocchio,
+coal, crocoddyl, mim_solvers, colmpc, force_feedback_mpc, crocoddyl_yaml,
+this package) is built from source with the same flags, in a separate
+install prefix. It runs at the end of P4, P7 and P8, and in T10.7, not per
+task. It is a test configuration only: shipped builds stay generic x86-64
+(R8).
 
 The allocation hook is the source of truth: it also sees allocations in
 precompiled third-party code, which Eigen's flag cannot see. The Eigen flag

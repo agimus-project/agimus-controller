@@ -36,3 +36,23 @@ design.md.
     functions.
 - Deviations: the Python tests "horizon raises on empty buffer" and "pop"
   become `has_horizon() == false` and `back()`.
+
+## Review of the plan (PR #334), 2026-11-25
+- Applied (docs): `EIGEN_INITIALIZE_MATRICES_BY_NAN` in RT-check builds;
+  test configurations A (debug), B (`-O3`), C (`-O3 -march=native`, whole
+  stack only, at phase ends); time as `std::chrono::nanoseconds` from
+  `steady_clock`, converted to `double` only at boundaries; zero weight
+  disables the cost (B10, with the `changeCostStatus` allocation found in
+  crocoddyl 3.2); bug-report rule and T0.4 bug audit; B4 and B7 explained,
+  B7 redesigned (one-argument `circularAppend` allocates every tick);
+  jrl-cmakemodules update in T5.1; crocoddyl_yaml type registry (T5.5),
+  colmpc and force-feedback types moved to `CPP/`; per-node allocation
+  for OpenMP, measured first (T10.4); benchmarks on a desktop CPU.
+- Applied (code): `time`, `dt`, `timesteps`, `total_time`,
+  `max_solve_time` and the debug timers are `std::chrono::nanoseconds`;
+  the RT-check definitions are `$<BUILD_INTERFACE:...>`, so the installed
+  target does not inherit them. Configurations A and B green (67 ctests),
+  in the container (doctest shim) and in a nix shell (real doctest).
+- Open, for the user: the crocoddyl_yaml type-registry split; B4 (a
+  `control_grav` residual with a reference is not planned); B7 (keep the
+  rolling buffer or update every node); YAML or TOML (maintainer question).
