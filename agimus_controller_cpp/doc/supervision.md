@@ -47,7 +47,7 @@ The loop is subagent-driven development: brief, implement, review, record.
 ## Brief template
 
 ```
-Task T<id>: <title>   (repo: <agimus_controller | crocoddyl_toml>)
+Task T<id>: <title>   (repo: <agimus_controller | crocoddyl-toml>)
 Goal: <one sentence>
 Read first: doc/design.md#<section>, doc/rt_safety.md (if any @rt code),
   <Python sources with line ranges>, <Python tests>
@@ -125,7 +125,8 @@ Each item is a yes/no question. A "no" is a finding.
   baseline. A regression of more than 3 % is a finding unless the task
   explains it. An optimization stays only with before/after numbers that
   meet R8.
-- **Build.** Plain CMake, no new dependency outside the brief, warnings
+- **Build.** Plain CMake in `CPP/`, Gepetto packaging in `CT/`
+  (crocoddyl_toml.md), no new dependency outside the brief, warnings
   clean, pre-commit clean, green in configurations A and B, no `-march`
   outside configuration C and T10.7.
 - **Time.** Durations and time points are `std::chrono::nanoseconds`, read

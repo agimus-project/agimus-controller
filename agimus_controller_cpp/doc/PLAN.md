@@ -80,8 +80,9 @@ Treat these as fixed. Changing one needs the user.
   ([doc/rt_safety.md#build-configurations](rt_safety.md#build-configurations)).
   `CT/` is packaged like the Gepetto packages instead
   ([doc/crocoddyl_toml.md#repository-and-build](crocoddyl_toml.md#repository-and-build));
-  the 2 GB, generic x86-64, doctest and test-configuration rules apply to it
-  too.
+  the 2 GB, generic x86-64 and doctest rules apply to it too, but it
+  registers tests with jrl's `add_unit_test` and runs configurations A and B
+  without the RT-check option (P5).
 - **R7 Git.** Atomic commits with short messages. No `Co-Authored-By` or
   "Generated with" lines. Never push.
 - **R8 Speed, measured.** The time of one `Mpc::run` tick (median, p99, max)
@@ -156,7 +157,7 @@ P5–P6 (crocoddyl-toml and the colmpc types) can run in parallel with P2–P4.
 ### P1 Package skeleton and real-time harness
 
 - **T1.1 (M) Skeleton.** `CPP/CMakeLists.txt`, `CPP/package.xml`, one
-  library target `agimus_controller_cpp` (alias
+  shared library target (`BUILD_SHARED_LIBS` ON by default) `agimus_controller_cpp` (alias
   `agimus_controller_cpp::agimus_controller_cpp`) with a placeholder source,
   install and export of the target and headers (`include/agimus_controller/`),
   `BUILD_TESTING` with doctest, and the `AGIMUS_CONTROLLER_RT_CHECKS` option
@@ -169,7 +170,8 @@ P5–P6 (crocoddyl-toml and the colmpc types) can run in parallel with P2–P4.
 - **T1.2 (M) Allocation harness.** Implement
   [doc/rt_safety.md#harness](rt_safety.md#harness): the test-support
   library, `CHECK_RT_SAFE` / `CHECK_ALLOCATES` / `CHECK_ABORTS`, every
-  negative test listed there, and the `check_rt_coverage` ctest.
+  negative test listed there except the shared-library one (added in T2.5),
+  and the `check_rt_coverage` ctest.
   **Done when** every negative test passes (each forbidden operation is
   detected); one example `@rt` function has its `Rt*` test and passes; and
   setting `AGIMUS_RT_ABORT_ON_ALLOC=1` makes a negative test abort, which the
@@ -190,7 +192,7 @@ Read [doc/design.md#data-types](design.md#data-types) first.
 - **T2.2 (M) Trajectory points.** `trajectory_point.hpp/.cpp`:
   `EndEffectorInput`, `WeightedTrajectoryPoint`, `RobotState`,
   `make_trajectory_point(nq, nv)`, `find_ee_input`, `interpolate_weights`.
-  Sources: `PY/trajectory.py:1-240,425-470`. Python has no test for
+  Sources: `PY/trajectory.py:1-180,285-330`. Python has no test for
   `interpolate_weights`: write new ones, including a frame present in only
   one of the two points (design.md, behaviour change B3).
 - **T2.3 (S) OCP parameters.** `ocp_params.hpp/.cpp`: `DtFactorsNSeq`,
@@ -199,9 +201,10 @@ Read [doc/design.md#data-types](design.md#data-types) first.
 - **T2.4 (S) Results and debug data.** `mpc_data.hpp/.cpp`. Source
   `PY/mpc_data.py`; port `PYT/test_mpc_data.py`.
 - **T2.5 (M) Trajectory buffer.** `trajectory_buffer.hpp/.cpp`, sliding and
-  constant modes. Source `PY/trajectory.py:321-422`; port all 18 tests of
+  constant modes. Source `PY/trajectory.py:181-283`; port all 16 tests of
   `PYT/test_buffer.py`, plus `Rt*` tests for `push_back` (including when
-  full), `horizon`, `clear_past`, in both modes.
+  full), `horizon`, `clear_past`, in both modes, and the shared-library
+  negative test of rt_safety.md (an allocation in `compute_horizon_indexes`).
 
 **P2 done when** all of the above build, pass, and `check_rt_coverage` passes.
 
@@ -224,7 +227,9 @@ Read [doc/design.md#ocp](design.md#ocp) and the warm-start and MPC sections.
 - **T4.1 (H) Golden files.** `CPP/test/golden/generate_golden.py` (runs in
   the Python judge environment from T0.2) writes TOML fixtures for golden
   sets G1–G5 and G10a ([doc/design.md#golden-files](design.md#golden-files)),
-  plus `CPP/test/golden/README.md` on how to regenerate them.
+  plus `CPP/test/golden/README.md` on how to regenerate them. T2.3's tests
+  gain a comparison with G1: T4.1 also edits `CPP/test/test_ocp_params.cpp`. Later tasks extend the same generator: T7.4
+  (G6–G8), T7.5 (G10b) and T8.4 (G9).
   **Done when** the fixtures are committed and regenerating them reproduces
   identical files.
 - **T4.2 (H) `Ocp` and cost updaters.** `ocp.hpp/.cpp` and
@@ -248,8 +253,10 @@ Read [doc/design.md#ocp](design.md#ocp) and the warm-start and MPC sections.
   `PYT/test_warm_start_shift_previous_reference.py` against golden sets G2 and
   G3.
 - **T4.5 (H) `Mpc`.** `mpc.hpp/.cpp`, source `PY/mpc.py`. Port
-  `PYT/test_mpc_unicycle.py` using crocoddyl's `ActionModelUnicycle` through
-  `Ocp`. Add the closed-loop golden test G10a: goal-reaching OCP, 20 ticks,
+  `PYT/test_mpc_unicycle.py`: build an `OcpModels` by hand from crocoddyl's
+  `ActionModelUnicycle` (its `StateVector` fits, because `OcpModels::state`
+  is a `StateAbstract`; no updaters), with a test-only warm start like
+  Python's `WarmStartUnicycle`. Add the closed-loop golden test G10a: goal-reaching OCP, 20 ticks,
   with the state advanced by `Mpc::integrate`. Add `RtMpc.run`: warm up, then
   100 ticks under `CHECK_RT_SAFE`, with `n_threads = 1`.
   **This is where third-party allocations show up (R3).** If the test goes
@@ -278,8 +285,11 @@ recorded.
 ### P5 crocoddyl-toml core (repo `CT/`)
 
 Read [doc/crocoddyl_toml.md](crocoddyl_toml.md) completely before the first
-task. `CT/` follows this plan's rules: plain CMake, doctest, RT rules where
-they apply (building is setup, so little is `@rt`), configurations A and B.
+task. `CT/` is packaged like the Gepetto packages (jrl-cmakemodules,
+gepetto/nix flake; crocoddyl_toml.md). It uses doctest, and its tests run in
+a Debug and a Release build (configurations A and B without the RT-check
+option, which is `CPP/`-only: building OCPs is setup, so `CT/` has no `@rt`
+code).
 
 - **T5.1 (M) Skeleton.** The Gepetto-style package from
   gepetto/example-adder ([doc/crocoddyl_toml.md#repository-and-build](crocoddyl_toml.md#repository-and-build)):
@@ -321,8 +331,10 @@ in `CPP/src/toml_types/`, tested with doctest. See
 
 ### P7 OCP from TOML
 
-- **T7.1 (M) `[agimus]` table.** `ocp_definition.hpp/.cpp`: parse
-  `Document::extra["agimus"]` into an `OcpDefinition`, strictly
+- **T7.1 (M) `[agimus]` table.** `ocp_definition.hpp/.cpp`:
+  `load_ocp_file(path)` registers the `CPP/` types, loads the file and parses
+  `Document::extra["agimus"]` into an `OcpDefinition` (design.md, Builders),
+  including `rolling_buffer` (implemented in T8.3), strictly
   ([doc/crocoddyl_toml.md#the-agimus-table](crocoddyl_toml.md#the-agimus-table)).
 - **T7.2 (H) Template builder.** `build_models_from_toml` in
   `ocp_builders.cpp`: one model per node from the running template with
@@ -338,12 +350,13 @@ in `CPP/src/toml_types/`, tested with doctest. See
 
   Write the mapping decisions to `CPP/test/resources/ocp/CONVERSION.md`; it
   becomes the input spec for the future translator.
-- **T7.4 (M) TOML parity.** Golden sets G6–G8 against Python
-  `OCPCrocoGeneric` on the same problems, plus `Rt*` tests of
+- **T7.4 (M) TOML parity.** Extend `generate_golden.py` with golden sets
+  G6–G8 and compare against them (Python `OCPCrocoGeneric` on the same
+  problems). Port `PYT/test_ocp_croco_generic.py` on the TOML files. Add `Rt*` tests of
   `set_reference_weighted_trajectory` and `solve` with collision and visual
   servoing.
-- **T7.5 (M) Closed loop on TOML.** Golden set G10b: the G10a loop on the
-  TOML goal-reaching OCP.
+- **T7.5 (M) Closed loop on TOML.** Generate and compare golden set G10b:
+  the G10a loop on the TOML goal-reaching OCP.
 
 ### P8 Force feedback
 
@@ -353,18 +366,20 @@ in `CPP/src/toml_types/`, tested with doctest. See
   (force_feedback_mpc `DAMSoftContact{1D,3D}AugmentedFwdDynamics`,
   `IAMSoftContactAugmented`).
 - **T8.2 (H) agimus side.** Build the `IAMSoftContactAugmented` per node (the
-  `soft_contact` section of the agimus file), add the soft-contact updater
+  model's `soft_contact_euler` integrator, crocoddyl_toml.md), add the soft-contact updater
   (f_des, f_weight, active_contact, tau_grav_weight) and the update of the
   IAM bounds, and handle the state size nx + nc. Source
   `PY/ocp/ocp_croco_generic_force_feedback.py`.
 - **T8.3 (H) Force-feedback warm start and rolling buffer.**
   `WarmStartShiftPreviousSolutionForceFeedback`, and the
-  `expect_rolling_buffer` mode as specified in design.md's B7 note (rotate
+  rolling buffer (`[agimus] rolling_buffer`, Python `expect_rolling_buffer`)
+  as specified in design.md's B7 note (rotate
   only when the buffer advanced by one node, two-argument `circularAppend`).
   Sources
   `PY/warm_start_shift_previous_solution_force_feedback.py` and
   `PY/ocp/ocp_croco_generic.py:865-882`.
-- **T8.4 (M) Parity.** Golden set G9 plus `Rt*` tests.
+- **T8.4 (M) Parity.** Generate and compare golden set G9, plus `Rt*`
+  tests.
 
 ### P9 Hardening and handover
 

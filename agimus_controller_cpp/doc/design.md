@@ -170,7 +170,7 @@ struct RobotState {                  // measured state given to Mpc::run
   `n_controls + 1` times.
 - `size()`, `operator[]`, `back()` and `horizon_indexes()` behave as in
   Python, including constant mode's `size() == 3 * (horizon_indexes().back() + 1)`
-  once a point has arrived (see `PY/trajectory.py:410-416`; the ROS node
+  once a point has arrived (see `PY/trajectory.py:270-276`; the ROS node
   depends on it).
 
 ### Parameters and results
@@ -216,7 +216,8 @@ created by the OCP builders.
 
 ```cpp
 struct OcpModels {
-  std::shared_ptr<crocoddyl::StateMultibody> state;   // crocoddyl or colmpc state
+  std::shared_ptr<crocoddyl::StateAbstract> state;    // crocoddyl or colmpc StateMultibody; any state in hand-built tests (unicycle)
+  std::shared_ptr<pinocchio::GeometryModel> geometry; // the object the collision residuals use; nullptr without collisions
   std::vector<std::shared_ptr<crocoddyl::ActionModelAbstract>> running;  // n_controls, one object per node
   std::shared_ptr<crocoddyl::ActionModelAbstract> terminal;
   std::vector<NodeUpdater> running_updaters;          // one per running node
@@ -225,15 +226,27 @@ struct OcpModels {
   std::vector<std::string> residual_costs;            // debug: publish_residual
   std::vector<TransformInput> input_transforms;       // visual servoing: (parent, child) frame names
   std::size_t force_dim = 0;                          // force feedback: nc, else 0
+  bool rolling_buffer = false;                        // [agimus] rolling_buffer (B7)
 };
+
+struct TransformInput { FrameName parent, child; };  // a frame pair, setup only
+// One entry per OcpModels::input_transforms, sized at setup. An empty
+// optional is a cleared transform (Python None). std::optional<SE3> never
+// allocates.
+using InputTransforms = std::vector<std::optional<pinocchio::SE3>>;
 ```
+
+The builder creates `geometry` (a copy of `RobotModels::collision_model()`)
+and passes the same pointer to the residuals through `BuildContext` and to
+`Ocp` through `OcpModels`, so the pairs a residual adds are the ones `Ocp`
+updates.
 
 Never share one action-model object between two nodes. Every node gets its
 own object, because references differ per node.
 
 ### `Ocp` (`ocp.hpp`)
 
-`Ocp(OcpModels, const OcpParams&, std::shared_ptr<pinocchio::GeometryModel> collision_model)`
+`Ocp(OcpModels, const OcpParams&)`
 
 - Setup:
   - creates `crocoddyl::ShootingProblem` (x0 zeros of size nx + force_dim);
@@ -242,7 +255,7 @@ own object, because references differ per node.
     `make_solver(problem, params)`, which returns a
     `std::shared_ptr<crocoddyl::SolverAbstract>`. Today it creates
     `mim_solvers::SolverCSQP` and applies every setting as in
-    `PY/ocp_base_croco.py:62-80`. This is the only place that names CSQP.
+    `PY/ocp_base_croco.py:64-81`. This is the only place that names CSQP.
     `Ocp` reads xs and us through `SolverAbstract`, and the gains through a
     pointer to the solver's `K` vector taken at setup. Another solver (T10.6)
     then means a new branch in `make_solver`, and nothing else changes;
@@ -252,11 +265,12 @@ own object, because references differ per node.
 - `/// @rt Status set_reference_weighted_trajectory(const std::vector<const WeightedTrajectoryPoint*>& horizon)`
   applies `running_updaters[i]` with `horizon[i]` and `terminal_updater` with
   `horizon.back()`. The size must be `n_controls + 1` (else
-  `kSizeMismatch`). The rolling-buffer variant is in force feedback (P8).
+  `kSizeMismatch`). Rolling (`OcpModels::rolling_buffer`, B7) is implemented in T8.3; Python
+  has it in both the generic and the force-feedback OCP.
 - `/// @rt bool solve(const Eigen::VectorXd& x0, const std::vector<Eigen::VectorXd>& xs, const std::vector<Eigen::VectorXd>& us)`
   solves with `solver_iters` and `max_solve_time`, then copies the solver's
   xs, us and K into the results and, if `use_debug_data`, fills the debug
-  data (`PY/ocp_base_croco.py:713-761`, `PY/ocp/ocp_croco_generic.py:827-853`).
+  data (`PY/ocp_base_croco.py:134-183`, `PY/ocp/ocp_croco_generic.py:827-853`).
 - `bool solve_without_limits(...)` takes the same arguments with 1000
   iterations and no timeout. It is the initial solve, so it is setup, not
   `@rt`.
@@ -270,8 +284,8 @@ own object, because references differ per node.
   - `pinocchio::GeomIndex geometry_index(std::string_view name, pinocchio::GeometryType)`
     is setup and throws on an unknown name.
   - `/// @rt void set_geometry_placement(pinocchio::GeomIndex, const pinocchio::SE3&, pinocchio::GeometryType)`
-    updates the colmpc state's own geometry model when the colmpc state is
-    used (`PY/ocp_base_croco.py:689-711`).
+    updates `OcpModels::geometry`, which is also the colmpc state's
+    geometry model when that state is used (`PY/ocp_base_croco.py:110-133`).
 - Input transforms (visual servoing):
   - `input_transforms()` returns the list of (parent, child) name pairs (setup);
   - `/// @rt void set_input_transform(std::size_t i, const pinocchio::SE3&)`;
@@ -364,7 +378,27 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   (`stateReg`, `ctrlReg`, `goalTracking`) and its updater semantics
   (`set_reference_weighted_trajectory`, lines 125-212), expressed as
   `NodeUpdater`s.
-- `OcpModels build_models_from_toml(const crocoddyl_toml::Document&, const OcpDefinition&, const RobotModels&, const OcpParams&)`
+- OCP files (P7, `ocp_definition.hpp`; the `[agimus]` keys are in
+  crocoddyl_toml.md):
+
+  ```cpp
+  struct VisualServoingSpec { std::string cost, world_frame, object_frame; };
+  struct NodeDefinition {                 // [agimus.running] / [agimus.terminal]
+    std::vector<std::string> update, update_frame_from_trajectory,
+        collision_weight_from_trajectory, publish_residuals;  // publish_residuals: running only
+    std::vector<VisualServoingSpec> visual_servoing;
+  };
+  struct OcpDefinition {                  // the parsed [agimus] table
+    std::string running_model, terminal_model;
+    NodeDefinition running, terminal;
+    bool rolling_buffer = false;
+  };
+  struct OcpFile { crocoddyl_toml::Document document; OcpDefinition definition; };
+  // Setup. Registers the CPP/ types (once), loads and validates the file,
+  // parses [agimus]. Throws crocoddyl_toml::ParseError or std::invalid_argument.
+  OcpFile load_ocp_file(const std::filesystem::path&);
+  ```
+- `OcpModels build_models_from_toml(const OcpFile&, const RobotModels&, const OcpParams&)`
   (P7) is described in crocoddyl_toml.md.
 - Both apply `robot_models.armature()` to every differential model, and set
   the per-node dt from `OcpParams::timesteps` and dt 0 on the terminal model.
@@ -401,7 +435,7 @@ class WarmStart {
 `Mpc(std::shared_ptr<Ocp>, std::shared_ptr<WarmStart>, std::shared_ptr<TrajectoryBuffer>)`
 
 - `/// @rt Status run(const RobotState&, std::chrono::nanoseconds now)` is
-  `PY/mpc.py:33-67`:
+  `PY/mpc.py:32-66`:
   - return `kNotEnoughData` unless `buffer.has_horizon()` (B2);
   - set the references;
   - generate the warm start into member storage;
@@ -485,7 +519,7 @@ fails on time.
   - Then 1000 measured ticks of `Mpc::run`. The state advances with
     `Mpc::integrate` from the first control, so the loop is closed and
     deterministic.
-  - Use the trajectory of golden set G10.
+  - Use the trajectory of golden set G10a.
 - **Report** one Markdown table row per OCP and configuration: median,
   p90, p99 and max of the tick; the median of each `MpcDebugData` phase
   timer; mean solver iterations and QP iterations. Also record the git
@@ -519,9 +553,9 @@ Every deliberate difference. A test covers each one, and the README lists them.
 
 | Id | Python | C++ |
 |---|---|---|
-| B1 | `PY/mpc.py:78`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt` (both are `std::chrono::nanoseconds`) |
-| B2 | `PY/mpc.py:39` checks `len < n_controls + 1`, but `horizon` needs `len > horizon_indexes[-1]` (larger when a factor > 1), so it asserts | checks `has_horizon()` and returns `kNotEnoughData` |
-| B3 | `PY/trajectory.py:448-451` raises `KeyError` when a frame is in only one point | a missing side counts as zero weights |
+| B1 | `PY/mpc.py:77`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt` (both are `std::chrono::nanoseconds`) |
+| B2 | `PY/mpc.py:38` checks `len < n_controls + 1`, but `horizon` needs `len > horizon_indexes[-1]` (larger when a factor > 1), so it asserts | checks `has_horizon()` and returns `kNotEnoughData` |
+| B3 | `PY/trajectory.py:308-311` raises `KeyError` when a frame is in only one point | a missing side counts as zero weights |
 | B4 | `ResidualModelControlGrav.update` sets a `reference` attribute that crocoddyl's class does not have (no effect) | only the weights are updated; see the note below the table |
 | B5 | `MPC.append_trajectory_points` calls `buffer.extend`, which does not exist | not ported; call `push_back` in a loop |
 | B6 | `ocp_traj_tracking_collision_avoidance.yaml` uses `collision_pair_id`, which the dataclass rejects | the converted file uses geometry names |
@@ -561,7 +595,9 @@ last node only. The defects:
 
 C++:
 
-- Setup throws if `expect_rolling_buffer` is set and a dt factor is not 1
+- Python's `expect_rolling_buffer` is the `[agimus]` key `rolling_buffer`,
+  carried by `OcpModels::rolling_buffer`. Setup throws if it is set and a
+  dt factor is not 1
   (fixes 1). Equal factors greater than 1 are not enough: node 1 then sits
   at buffer index 2, but the buffer advances by one point per tick.
 - `Ocp` remembers the buffer position of node 0 from the previous tick (the

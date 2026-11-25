@@ -145,7 +145,7 @@ actuation = { type = "full" }
 
 [models.running.costs.control_reg]
 weight = 1.0
-residual = { type = "control_grav" }
+residual = { type = "control" }
 activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.running.costs.state_reg]
@@ -155,7 +155,8 @@ activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.running.costs.goal_tracking]
 weight = 1.0
-residual = { type = "frame_placement", frame = "fer_hand" }
+# Python `id: 0`: the frame follows the trajectory ([agimus] below).
+residual = { type = "frame_placement", frame = "universe" }
 activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.terminal]
@@ -170,7 +171,7 @@ activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.terminal.costs.goal_tracking]
 weight = 1.0
-residual = { type = "frame_placement", frame = "fer_hand" }
+residual = { type = "frame_placement", frame = "universe" }
 activation = { type = "weighted_quad", weights = 1.0 }
 
 # Read by agimus_controller_cpp, ignored by crocoddyl-toml (see below).
@@ -298,8 +299,17 @@ Constraint item keys: `active` (true), plus the constraint's keys.
 ## Types registered by agimus_controller_cpp
 
 They live in `CPP/src/toml_types/` and are registered by
-`agimus_controller::register_toml_types()`, which the builders call once at
-setup.
+`agimus_controller::register_toml_types()`. Registration must happen before
+a file is loaded, because loading validates the registered types' keys. So
+agimus loads OCP files only through `agimus_controller::load_ocp_file(path)`
+(setup), which:
+
+1. calls `register_toml_types()`, which is idempotent (`std::call_once`), so
+   loading several files never registers a name twice;
+2. calls `crocoddyl_toml::load_file`;
+3. parses `[agimus]` into an `OcpDefinition`;
+4. returns both as an `OcpFile` (design.md, Builders), the input of
+   `build_models_from_toml`.
 
 | `type` | Family | Builds | Keys | CMake option |
 |---|---|---|---|---|
@@ -314,6 +324,11 @@ Collision rules (port of `PY/ocp/ocp_croco_generic.py:498-550`):
 
 - the residual adds the geometry pair to the geometry model if it is
   missing, then uses its index;
+- There is one geometry model per OCP: `BuildContext::geometry`, which
+  becomes `OcpModels::geometry`. When colmpc's state is used, agimus creates
+  it from that same pointer, so the pairs a residual adds and the placements
+  `Ocp::set_geometry_placement` updates are in one object. If colmpc's state
+  copies the geometry model instead of sharing it, stop (condition 4).
 - `colmpc_distance_collision2` needs colmpc's `StateMultibody` and the
   `colmpc_free_fwd` dynamics. The file says so explicitly with
   `dynamics = { type = "colmpc_free_fwd" }`; nothing is chosen silently, as
@@ -335,7 +350,7 @@ errors.
 | `<node>.collision_weight_from_trajectory` | costs whose weight is `w_collision_avoidance` |
 | `<node>.publish_residuals` | `publish_residual: true`; `running` only, because Python only publishes running residuals |
 | `<node>.visual_servoing` | array of `{ cost, world_frame, object_frame }` (`ResidualModelVisualServoing`) |
-| `soft_contact` | force feedback (P8) |
+| `rolling_buffer` | Python `expect_rolling_buffer` (default false); see design.md, B7 |
 
 `<node>` is `running` or `terminal`. Python's `active: false` is the
 crocoddyl-toml `active = false` key on the cost or constraint itself.
@@ -343,6 +358,15 @@ crocoddyl-toml `active = false` key on the cost or constraint itself.
 Rules:
 
 - A name that is listed but missing from its model is a setup error.
+- `update_frame_from_trajectory` and `visual_servoing` imply `update`: the
+  cost's reference and weights follow the trajectory too. Listing it in
+  `update` as well is allowed and changes nothing.
+- A cost listed under `visual_servoing` uses the `kVisualServoing` rule,
+  not the rule of its residual type (`frame_placement`). Listing it under
+  `update_frame_from_trajectory` too is a setup error.
+- Force feedback needs no `[agimus]` key: the soft-contact dynamics and
+  integrator types carry its settings, and the soft-contact updater follows
+  from them (P8).
 - A cost listed under `update` whose residual type has no rule (see the
   updater table in design.md) is a setup error.
 - The update rule follows from the residual type, found once at setup
@@ -360,7 +384,9 @@ Rules:
 
 T7.2, `build_models_from_toml`:
 
-1. Load the file (`crocoddyl_toml::load_file`) and parse `[agimus]`.
+1. Take the `OcpFile` returned by `load_ocp_file` (registration and
+   loading are already done). Until T8.3 implements rolling, throw
+   `std::invalid_argument` if `rolling_buffer` is true.
 2. Create the state: colmpc's if either template uses `colmpc_free_fwd`,
    otherwise crocoddyl's. Use the reduced model from `RobotModels`.
 3. For each of the `n_controls` running nodes, call

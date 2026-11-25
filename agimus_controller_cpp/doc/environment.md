@@ -46,8 +46,11 @@ colcon test --packages-select agimus_controller_cpp
 colcon test-result --verbose
 ```
 
-`BUILD_TESTING=ON` needs doctest (see above). Without doctest, build the
-library alone with `-DBUILD_TESTING=OFF`.
+`BUILD_TESTING=ON` needs doctest (see above): install `doctest-dev` from a
+network that reaches the PAL apt mirror, or use the nix C++ shell that comes
+with the code (`nix develop .#cpp`, added on branch `cpp-port/basics`, not
+in this plan-only branch). Without doctest, build the library alone
+with `-DBUILD_TESTING=OFF`.
 
 Benchmark and production builds: `-DCMAKE_BUILD_TYPE=Release
 -DAGIMUS_CONTROLLER_RT_CHECKS=OFF` (see design.md, Performance).

@@ -168,7 +168,8 @@ These prove the harness goes red. Each uses `CHECK_ALLOCATES`, or
 - a `delete` of memory allocated before the guard;
 - a C `malloc`;
 - an allocation inside our shared library (`compute_horizon_indexes`),
-  which proves that calls from shared libraries are interposed;
+  which proves that calls from shared libraries are interposed. This one is
+  added in T2.5, when the function exists; T1.2's done-when excludes it;
 - `CHECK_ABORTS` of `Eigen::VectorXd` construction with a dynamic size under
   the guard (proves `EIGEN_RUNTIME_NO_MALLOC` is active);
 - `CHECK_ABORTS` of a dynamic-size temporary, `Eigen::VectorXd y = A * x;`;
