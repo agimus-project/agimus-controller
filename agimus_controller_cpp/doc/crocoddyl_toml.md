@@ -63,8 +63,9 @@ parsers disagree with each other, and Python's standard library reads TOML
   [gepetto/example-adder](https://github.com/gepetto/example-adder):
   - `CMakeLists.txt` with jrl-cmakemodules found as an installed package
     (`find_package(jrl-cmakemodules REQUIRED CONFIG)`, then `base.cmake`),
-    not a git submodule. It uses `PROJECT_NAMESPACE loco-3d`,
-    `PROJECT_NAME crocoddyl-toml`, `PROJECT_USE_CMAKE_EXPORT TRUE`,
+    not a git submodule. It uses `PROJECT_NAME crocoddyl-toml`,
+    `PROJECT_URL https://github.com/loco-3d/crocoddyl-toml`,
+    `PROJECT_USE_CMAKE_EXPORT TRUE`,
     `compute_project_args`, `check_minimal_cxx_standard(17 ENFORCE)`, and
     jrl's install and export. The container has jrl-cmakemodules 2.3.0
     (`ros-lyrical-jrl-cmakemodules`).
@@ -97,9 +98,13 @@ parsers disagree with each other, and Python's standard library reads TOML
   - toml++ is header-only and heavy to compile. Compile it once, in
     `src/toml_impl.cpp` with `TOML_HEADER_ONLY=0`, so every translation unit
     stays under 2 GB.
-- Library target `crocoddyl-toml::crocoddyl-toml` (jrl's
-  `PROJECT_NAME::PROJECT_NAME`); headers in `include/crocoddyl-toml/`
-  (jrl's `CUSTOM_HEADER_DIR`); C++ namespace `crocoddyl_toml`.
+- **Every name comes from the package name**, never from the GitHub
+  organisation (which appears only in `PROJECT_URL`):
+  - CMake project and exported target: `crocoddyl-toml::crocoddyl-toml`
+    (jrl's `PROJECT_NAME::PROJECT_NAME`);
+  - headers: `include/crocoddyl-toml/` (jrl's `CUSTOM_HEADER_DIR`);
+  - C++ namespace: `crocoddyl_toml`, the package name with `-` replaced by
+    `_`, because a C++ identifier cannot contain `-`.
 
 ## File format
 
