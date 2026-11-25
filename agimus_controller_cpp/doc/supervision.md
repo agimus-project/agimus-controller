@@ -65,7 +65,7 @@ Porting means reading every line, so the port is also a bug hunt. Whoever
 sees an obvious logical bug reports it, whether the bug is in the Python
 source, in our C++ code or in a dependency. Examples: a wrong unit
 conversion (B1), a check against the wrong bound (B2), a call to a method
-that does not exist (B5), state that is never reset (B7).
+that does not exist (B5), an unchecked assumption of one node per tick (B7).
 
 - Do not port the bug silently, and do not fix it silently.
 - The report gives: file and line, what the code does, what it should do,

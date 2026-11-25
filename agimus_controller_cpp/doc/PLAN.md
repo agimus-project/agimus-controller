@@ -360,8 +360,8 @@ in `CPP/src/toml_types/`, tested with doctest. See
 - **T8.3 (H) Force-feedback warm start and rolling buffer.**
   `WarmStartShiftPreviousSolutionForceFeedback`, and the
   `expect_rolling_buffer` mode as specified in design.md's B7 note (rotate
-  only when the buffer advanced by one node, two-argument `circularAppend`,
-  `Ocp::reset`). Sources
+  only when the buffer advanced by one node, two-argument `circularAppend`).
+  Sources
   `PY/warm_start_shift_previous_solution_force_feedback.py` and
   `PY/ocp/ocp_croco_generic.py:865-882`.
 - **T8.4 (M) Parity.** Golden set G9 plus `Rt*` tests.

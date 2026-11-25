@@ -79,3 +79,10 @@ design.md.
   `pkgs/crocoddyl-toml.nix` in gepetto/nix (pull request, user approval).
 - Open: the license (none yet; crocoddyl is BSD-3-Clause); doctest or
   Boost.Test (loco-3d maintainers); Python bindings later.
+
+## Rulings B4 and B7, 2026-11-25
+- B7: keep the rolling buffer (real-time rolling, design.md B7 note).
+  A reset was designed, then dropped: "forget about the reset" (user). No
+  `Mpc::reset`, `Ocp::reset`, `WarmStart::reset` or `TrajectoryBuffer::clear`.
+- B4: the user is not sure; the plan keeps parity (no residual with a
+  reference). Revisit if a demo needs torque tracking around gravity.

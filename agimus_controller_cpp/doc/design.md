@@ -257,9 +257,6 @@ own object, because references differ per node.
   solves with `solver_iters` and `max_solve_time`, then copies the solver's
   xs, us and K into the results and, if `use_debug_data`, fills the debug
   data (`PY/ocp_base_croco.py:713-761`, `PY/ocp/ocp_croco_generic.py:827-853`).
-- `/// @rt void reset()` forgets the rolling-buffer position (B7), so the
-  next `set_reference_weighted_trajectory` updates every node. Call it
-  before a new initial solve.
 - `bool solve_without_limits(...)` takes the same arguments with 1000
   iterations and no timeout. It is the initial solve, so it is setup, not
   `@rt`.
@@ -420,6 +417,20 @@ class WarmStart {
   buffer.
 - `debug_data()`, `ocp()`, `buffer()`.
 
+### What Python does over a run
+
+- **Start-up, setup:** the ROS node waits until the buffer holds twice the
+  horizon, then does one solve warm-started by `WarmStartReference` with no
+  iteration limit, and seeds the shift warm start with its result
+  (`ROS/agimus_controller.py:368-390,465-481`). C++: `Ocp::solve_without_limits`
+  plus `WarmStart::update_previous_solution`, both setup.
+- **Buffer running low, in the loop:** below 1.5 horizons the node warns;
+  below 1 horizon it logs an error and **appends a copy of the last point**
+  (`ROS/agimus_controller.py:497-512`). The reference holds the last point,
+  the MPC keeps solving, and the buffer never runs dry. `MPC.run` itself
+  returns `None` when data is missing (C++: `kNotEnoughData`).
+- The warm start shifts its previous solution for the whole run.
+
 ## Performance
 
 Ruling R8. The hot path is everything reachable from `Mpc::run` and
@@ -514,7 +525,7 @@ Every deliberate difference. A test covers each one, and the README lists them.
 | B4 | `ResidualModelControlGrav.update` sets a `reference` attribute that crocoddyl's class does not have (no effect) | only the weights are updated; see the note below the table |
 | B5 | `MPC.append_trajectory_points` calls `buffer.extend`, which does not exist | not ported; call `push_back` in a loop |
 | B6 | `ocp_traj_tracking_collision_avoidance.yaml` uses `collision_pair_id`, which the dataclass rejects | the converted file uses geometry names |
-| B7 | the rolling buffer (`PY/ocp/ocp_croco_generic.py:865-882`) has four defects, listed below the table | see below |
+| B7 | the rolling buffer (`PY/ocp/ocp_croco_generic.py:865-882`) has three defects, listed below the table | see below |
 | B8 | `use_filter_line_search` is a class attribute, not a dataclass field, so the constructor cannot set it | a normal field, default false |
 | B9 | `TrajectoryBuffer` grows without bound | fixed capacity; `push_back` returns `kBufferFull` |
 | B10 | a cost with zero weight is still evaluated | the updater disables it (see Cost updaters); same solution, less work |
@@ -527,7 +538,8 @@ around gravity compensation, and ignore `robot_effort`", and C++ keeps it,
 which keeps parity. If `robot_effort` is meant to be tracked around gravity
 compensation (`r = u - g(q) - u_ref`), that needs a new residual, which
 changes the solution compared with Python. It is not in this plan, and the
-user decides whether to add it. Until then, T7.1 rejects nothing, but the
+user decides whether to add it. Status (2026-11-25): the user is not sure,
+so the plan keeps parity and adds no residual. T7.1 rejects nothing, and the
 README says that `update` on `control_grav` updates only the weights.
 
 **B7, rolling buffer.** With `expect_rolling_buffer`, Python sets the
@@ -542,9 +554,7 @@ last node only. The defects:
    the points already in the horizon have not changed. It goes wrong when a
    tick is skipped, when the MPC rate differs from `1 / dt`, when a
    dt factor is greater than 1, or when the trajectory is replaced.
-3. **`_first_call` is never reset**, so after a reset (new initial solve,
-   cleared buffer) the nodes keep stale references.
-4. **The one-argument `circularAppend(model)` calls `model->createData()`
+3. **The one-argument `circularAppend(model)` calls `model->createData()`
    every tick**, which allocates (crocoddyl 3.2
    `optctrl/shooting.hxx`). The solver also calls `resizeData()` on the next
    solve, because `circularAppend` sets `is_updated_`.
@@ -556,18 +566,18 @@ C++:
   at buffer index 2, but the buffer advances by one point per tick.
 - `Ocp` remembers the buffer position of node 0 from the previous tick (the
   `id` of the point used). It rotates only when the new node 0 is the old
-  node 1. Otherwise (first call, skipped tick, jump, reset) it updates every
-  node, exactly as without the rolling buffer (fixes 2 and 3). `Ocp::reset()`
-  forgets the position.
+  node 1. Otherwise (first call, skipped tick, jump) it updates every node,
+  exactly as without the rolling buffer (fixes 2).
 - It rotates with the two-argument `circularAppend(model, data)`, passing
-  node 0's own data, so nothing is created (fixes 4). `RtOcp.set_reference...`
+  node 0's own data, so nothing is created (fixes 3). `RtOcp.set_reference...`
   covers a rotation followed by a solve, so the `resizeData()` that the
   solver then runs is proven allocation-free (same sizes), or goes red (R3).
 - Test: over 50 ticks with a skipped tick and a trajectory jump, the
   references of every node equal those of an OCP without the rolling
   buffer.
-- The user may still decide that the rolling buffer is not worth this
-  logic, and drop it in favour of updating every node (measured in T10.2).
+- **Ruling (user, 2026-11-25): keep the rolling buffer.** Rolling
+  (`set_reference_weighted_trajectory`) is `@rt`, with its `Rt*` test. No
+  reset is planned.
 
 ## Golden files
 
