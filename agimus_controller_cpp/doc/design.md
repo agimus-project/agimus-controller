@@ -96,7 +96,8 @@ struct EndEffectorInput {            // agimus_msgs/MpcEEInput
 struct WeightedTrajectoryPoint {     // agimus_msgs/MpcInput
   int id = -1;
   std::int64_t time_ns = 0;
-  Eigen::VectorXd q, w_q;            // size nq
+  Eigen::VectorXd q;                 // size nq
+  Eigen::VectorXd w_q;               // size nv: the state residual lives in the tangent space
   Eigen::VectorXd qdot, w_qdot;      // size nv
   Eigen::VectorXd qddot, w_qddot;    // size nv
   Eigen::VectorXd robot_effort, w_robot_effort;  // size nv
@@ -115,11 +116,19 @@ struct RobotState {                  // measured state given to Mpc::run
   vector (weights at zero). `ee_inputs` starts empty.
 - `/// @rt const EndEffectorInput* find_ee_input(const WeightedTrajectoryPoint&, std::string_view name)`
   scans linearly and returns nullptr if the name is absent.
-- `operator==` compares every field exactly; it is used by tests.
-- `/// @rt void interpolate_weights(const WeightedTrajectoryPoint& a, const WeightedTrajectoryPoint& b, double alpha, WeightedTrajectoryPoint& out)`
+- `/// @rt bool same_sizes(const WeightedTrajectoryPoint&, const WeightedTrajectoryPoint&)`
+  is true when every vector of both points has the same size; the buffer
+  uses it to refuse a point that would reallocate a slot.
+- `operator==` compares every field exactly (different sizes compare
+  unequal); it is used by tests.
+- `/// @rt Status interpolate_weights(const WeightedTrajectoryPoint& a, const WeightedTrajectoryPoint& b, double alpha, WeightedTrajectoryPoint& out)`
   writes only the `w_*` fields and the `ee_inputs` weights of `out`. `alpha`
   is clamped to [0, 1]. The end effectors are the union by name; a frame
   missing on one side counts as zero weights there (behaviour change B3).
+  - A union frame missing from `out` is appended with identity pose.
+  - A frame of `out` that is in neither input gets zero weights.
+  - It returns `kSizeMismatch` if the weight vectors differ in size, and
+    `kBufferFull` if the union exceeds `kMaxEndEffectors`.
 - Python splits poses, velocities and forces into three dicts keyed by frame.
   Here they sit in one `EndEffectorInput` per frame, as in the message.
   Python's `w_end_effector_poses[f]` is `find_ee_input(p, f)->w_pose`, and so on.
@@ -129,8 +138,14 @@ struct RobotState {                  // measured state given to Mpc::run
 `TrajectoryBuffer(const DtFactorsNSeq&, std::size_t capacity, BufferMode, const WeightedTrajectoryPoint& prototype)`
 
 - Setup copies `prototype` into every slot, so slots are sized. Storage is a
-  ring of `capacity` slots.
+  ring of `capacity` slots. In sliding mode `capacity` must exceed
+  `horizon_indexes().back()` (setup throws otherwise); constant mode ignores
+  it.
+- `compute_horizon_indexes(const DtFactorsNSeq&)` (setup) gives the node
+  indexes: 0, then the cumulative factors (Python
+  `TrajectoryBuffer.compute_horizon_indexes`).
 - `/// @rt Status push_back(const WeightedTrajectoryPoint&)`:
+  - `kSizeMismatch` if the point is not sized like the prototype;
   - sliding mode: copy into the next slot, `kBufferFull` when full;
   - constant mode: overwrite the single latest point.
 - `/// @rt void clear_past()`: sliding mode drops the oldest point; constant
@@ -155,7 +170,10 @@ struct RobotState {                  // measured state given to Mpc::run
   throws if `horizon_size != n_controls`.
 - `OcpResults`: `std::vector<Eigen::VectorXd> states, feed_forward_terms;
   std::vector<Eigen::MatrixXd> riccati_gains;`. Python's typo `ricatti` is
-  fixed.
+  fixed. `resize(n_controls, nx, ndx, nu)` sizes it at setup, and
+  `/// @rt Status copy_results(const OcpResults& src, OcpResults& dst)` copies
+  element by element (`kSizeMismatch`, `dst` unchanged, if the shapes
+  differ). Warm starts use it in `update_previous_solution`.
 - `OcpDebugData`: `result`, `references` and `residuals` as
   `std::vector<NamedMatrix>` (`struct NamedMatrix { std::string name; Eigen::MatrixXd data; }`,
   names and sizes set at setup), plus `kkt_norm`, `nb_iter`, `nb_qp_iter` and

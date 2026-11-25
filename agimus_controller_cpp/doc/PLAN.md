@@ -141,8 +141,8 @@ P5–P6 (crocoddyl_yaml) can run in parallel with P2–P4.
   `BUILD_TESTING` with doctest, and the `AGIMUS_CONTROLLER_RT_CHECKS` option
   from rt_safety.md. The doctest `main` is compiled once, in the test-support
   library (`DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN`), not in every test file. Find
-  only the dependencies P1–P4 need: Eigen3, pinocchio, crocoddyl,
-  mim_solvers, doctest.
+  only what the code so far needs (Eigen3, pinocchio, doctest); each later
+  phase adds its own dependencies (crocoddyl and mim_solvers in P4).
   **Done when** the colcon build from `doc/environment.md` succeeds and
   `ctest` runs (0 tests is fine).
 - **T1.2 (M) Allocation harness.** Implement

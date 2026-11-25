@@ -81,8 +81,20 @@ them. That is how allocations inside third-party code are seen. Eigen's
   not have.
   - It `fork()`s; the child runs `statement` and calls `_exit(0)`.
   - The parent `waitpid`s and checks that the child was killed by `SIGABRT`.
+  - The statement runs in a capture-less lambda, so it cannot use the
+    test's local variables.
   - Use it only in the negative-test executable, which stays single-threaded
     (no OpenMP), so forking is safe.
+- An Eigen allocation under the guard, in code compiled with
+  `EIGEN_RUNTIME_NO_MALLOC`, **aborts** the test executable rather than
+  being counted, because Eigen's check fires before the allocation reaches
+  the hook. doctest reports the crash with the test name. Other allocations
+  are counted and reported by `CHECK_RT_SAFE`.
+- Never put doctest assertions inside a guarded statement, because doctest
+  allocates.
+- The compiler may elide a `new`/`delete` pair whose pointer does not
+  escape, so negative tests write their results and pointers to `volatile`
+  globals.
 
 ### Eigen flags
 
@@ -93,11 +105,6 @@ same definitions and every translation unit agrees):
 - `EIGEN_RUNTIME_NO_MALLOC`, which makes `set_is_malloc_allowed(false)`
   effective: Eigen asserts on any heap allocation in code compiled in our
   translation units;
-- `EIGEN_NO_AUTOMATIC_RESIZING`: assigning between different sizes asserts
-  instead of reallocating (an empty destination may still be resized, which
-  setup code relies on). If crocoddyl or pinocchio headers trip this in
-  setup code, drop this definition, record why in the ledger, and keep the
-  first one;
 - `-UNDEBUG`, because Eigen's checks are `eigen_assert`s and need
   assertions on. RT-check builds are therefore not release builds.
   Production and benchmark builds set the option OFF (design.md,
@@ -107,6 +114,12 @@ The allocation hook is the source of truth: it also sees allocations in
 precompiled third-party code, which Eigen's flag cannot see. The Eigen flag
 adds an exact abort location for our own code.
 
+`EIGEN_NO_AUTOMATIC_RESIZING` is **not** used. Eigen 3.4 checks it only in
+`PlainObjectBase::_resize_to_match`; plain assignment goes through
+`resize_if_allowed` (`Eigen/src/Core/AssignEvaluator.h`) and resizes
+silently. A size-changing assignment under the guard is still caught,
+because the resize reallocates and `EIGEN_RUNTIME_NO_MALLOC` aborts.
+
 ### Negative tests (`test_rt_harness.cpp`)
 
 These prove the harness goes red. Each uses `CHECK_ALLOCATES`, or
@@ -114,15 +127,20 @@ These prove the harness goes red. Each uses `CHECK_ALLOCATES`, or
 
 - `std::vector<double>` growth (`push_back` past capacity);
 - a `std::string` longer than the small-string buffer;
-- `Eigen::VectorXd` construction with a dynamic size;
-- a dynamic-size temporary: `Eigen::VectorXd y = A * x;`;
 - `std::make_shared<int>()`;
 - `throw` plus `catch` of a `std::runtime_error`;
-- a `free` of memory allocated before the guard;
-- `CHECK_ABORTS` of a dynamic Eigen allocation under the guard (proves
-  `EIGEN_RUNTIME_NO_MALLOC` is active);
-- with `EIGEN_NO_AUTOMATIC_RESIZING`: `CHECK_ABORTS` of `a = b` with sizes 3
-  and 4.
+- a `delete` of memory allocated before the guard;
+- a C `malloc`;
+- an allocation inside our shared library (`compute_horizon_indexes`),
+  which proves that calls from shared libraries are interposed;
+- `CHECK_ABORTS` of `Eigen::VectorXd` construction with a dynamic size under
+  the guard (proves `EIGEN_RUNTIME_NO_MALLOC` is active);
+- `CHECK_ABORTS` of a dynamic-size temporary, `Eigen::VectorXd y = A * x;`;
+- `CHECK_ABORTS` of a resizing assignment `a = b` (sizes 3 and 4);
+- a control: the same Eigen allocation without the guard does not abort, so
+  `CHECK_ABORTS` cannot pass vacuously;
+- positive controls: fixed-size Eigen work, and a dynamic `A * x` into
+  preallocated storage, are RT-safe.
 
 ### Coverage rule (`check_rt_coverage`)
 
