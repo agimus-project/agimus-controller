@@ -162,5 +162,5 @@ none are installed yet (T0.3).
 | `cmake` | github.com/mohitmishra786/low-level-dev-skills (`skills/build-systems/cmake`) | Target-based CMake for T1.1 and T5.x. |
 | `heaptrack` / `valgrind` | the same repo (`skills/profilers/`) | Second opinion when the allocation hook reports something hard to locate. |
 | Rulebook and judge method | github.com/anthropics/code-migration-kit-with-claude-code | Background only. design.md is the rulebook and the golden files are the judge; do not run the kit's pipeline (it assumes same-architecture ports). |
-| `rt-safe-cpp` (to write, T1.3) | this repo | No public skill covers real-time C++, Eigen or Pinocchio. The PickNik MoveIt Pro realtime guidelines (docs.picknik.ai) were the closest model. |
+| `rt-safe-cpp` (T1.3) | this repo, `.claude/skills/rt-safe-cpp/` | No public skill covers real-time C++, Eigen or Pinocchio. The PickNik MoveIt Pro realtime guidelines (docs.picknik.ai) were the closest model. |
 | already installed: `mattpocock-skills:tdd`, `code-review`, `simplify`, `mattpocock-skills:writing-for-agents` | — | TDD for implementers; `code-review` for T9.5; `writing-for-agents` for T1.3. |

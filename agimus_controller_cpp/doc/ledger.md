@@ -174,3 +174,10 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   `std::runtime_error` (Python: `ValueError`).
 - Open: A14 (armature by name) and A17 (capsule length) wait for the user;
   both are ported as in Python.
+
+## T1.3 Project skill `rt-safe-cpp`: done
+- `.claude/skills/rt-safe-cpp/SKILL.md`, model-invoked: five steps and the
+  red-test triage, pointing to rt_safety.md for every rule. Briefs name it
+  in "Rulings in force" for any task with `@rt` code; the first such
+  brief (T4.2) checks the done-when (the implementer finds the rules and
+  the macros from the skill alone).
