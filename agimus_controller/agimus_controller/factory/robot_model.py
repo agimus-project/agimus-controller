@@ -346,6 +346,15 @@ class RobotModels:
     def armature(self) -> npt.NDArray[np.float64]:
         """Armature of the robot.
         Returns:
-            npt.NDArray[np.float64]: Armature of the robot.
+            npt.NDArray[np.float64]: Armature of the robot, of size nv of the
+            (reduced) robot model. The armature given in the parameters is
+            ordered like moving_joint_names, with one value per joint; it is
+            placed at each joint's velocity indices in the robot model.
         """
-        return self._params.armature
+        if self._params.free_flyer or self._robot_model is None:
+            return self._params.armature
+        armature = np.zeros(self._robot_model.nv, dtype=np.float64)
+        for name, value in zip(self._params.moving_joint_names, self._params.armature):
+            joint = self._robot_model.joints[self._robot_model.getJointId(name)]
+            armature[joint.idx_v : joint.idx_v + joint.nv] = value
+        return armature
