@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
+import pinocchio as pin
 import time
 import os
 import resource_retriever
@@ -130,6 +131,7 @@ class RobotModelsMixin:
             return
         if self.q0 is None:
             self.q0 = np.array(joint_states_msg.position)
+            self.q0_joint_names = list(joint_states_msg.name)
             self.destroy_subscription(self.state_subscriber)
             self.destroy_subscription(self.subscriber_robot_description)
             self.destroy_subscription(self.subscriber_robot_srdf_description)
@@ -161,6 +163,23 @@ class RobotModelsMixin:
             moving_joint_names=self.moving_joint_names,
             **robot_model_parameters_kwargs,
         )
+        self.robot_models = RobotModels(robot_params)
+        # Lock the joints that are not moving at their measured position.
+        # q0 follows the joint order of the full model, which is only known
+        # once the URDFs are parsed: build the models again with it.
+        full_model = self.robot_models.full_robot_model
+        robot_params.q0 = pin.neutral(full_model)
+        for name, position in zip(self.q0_joint_names, self.q0):
+            if not full_model.existJointName(name):
+                continue
+            joint = full_model.joints[full_model.getJointId(name)]
+            if joint.nq == 1:
+                robot_params.q0[joint.idx_q] = position
+            elif joint.nq == 2 and joint.nv == 1:  # continuous joint: cos, sin
+                robot_params.q0[joint.idx_q : joint.idx_q + 2] = [
+                    np.cos(position),
+                    np.sin(position),
+                ]
         self.robot_models = RobotModels(robot_params)
         self.rmodel = self.robot_models._robot_model
 
