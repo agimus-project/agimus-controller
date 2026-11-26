@@ -20,8 +20,10 @@ target_link_libraries(
 )
 
 set(AGIMUS_TESTS
+    test_cost_updater
     test_fixed_capacity
     test_mpc_data
+    test_ocp
     test_ocp_params
     test_robot_models
     test_rt_harness
@@ -47,12 +49,27 @@ target_compile_definitions(
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
 
-# Golden files written by test/golden/generate_golden.py.
-target_link_libraries(test_ocp_params PRIVATE tomlplusplus::tomlplusplus)
+# Panda fixtures of test_ocp and test_cost_updater: their own translation
+# unit, to keep each test file under the compile-RAM limit.
+add_library(agimus_panda_ocp_fixtures STATIC panda_ocp.cpp)
+target_link_libraries(agimus_panda_ocp_fixtures PUBLIC agimus_controller_cpp)
 target_compile_definitions(
-    test_ocp_params
-    PRIVATE AGIMUS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+    agimus_panda_ocp_fixtures
+    PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
+target_compile_options(agimus_panda_ocp_fixtures PRIVATE -Wall -Wextra)
+foreach(test_name test_cost_updater test_ocp)
+    target_link_libraries(${test_name} PRIVATE agimus_panda_ocp_fixtures)
+endforeach()
+
+# Golden files written by test/golden/generate_golden.py.
+foreach(test_name test_ocp test_ocp_params)
+    target_link_libraries(${test_name} PRIVATE tomlplusplus::tomlplusplus)
+    target_compile_definitions(
+        ${test_name}
+        PRIVATE AGIMUS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+    )
+endforeach()
 
 add_test(
     NAME check_rt_coverage

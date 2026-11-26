@@ -34,7 +34,9 @@ find_package(mim_solvers 0.3.0 REQUIRED)
 
 add_library(
     agimus_controller_cpp
+    src/cost_updater.cpp
     src/mpc_data.cpp
+    src/ocp.cpp
     src/ocp_params.cpp
     src/robot_models.cpp
     src/status.cpp
