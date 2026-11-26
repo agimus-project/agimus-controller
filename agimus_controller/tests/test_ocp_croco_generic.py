@@ -112,6 +112,29 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
             cdata.costs.costs["control"].cost, np.sum(0.5 * w * (u - uref) ** 2)
         )
 
+    def test_update_requires_weighted_activation(self):
+        for activation in (None, ocp_croco_generic.ActivationModelExp()):
+            with self.assertRaises(ValueError):
+                ocp_croco_generic.CostModelSumItem(
+                    "control",
+                    ocp_croco_generic.CostModelResidual(
+                        residual=ocp_croco_generic.ResidualModelControl(),
+                        activation=activation,
+                    ),
+                    update=True,
+                )
+        # Collision costs only update the scalar cost weight.
+        ocp_croco_generic.CostModelSumItem(
+            "distance",
+            ocp_croco_generic.CostModelResidual(
+                residual=ocp_croco_generic.ResidualDistanceCollision(
+                    collision_pair=("a", "b")
+                ),
+                activation=ocp_croco_generic.ActivationModelExp(),
+            ),
+            update=True,
+        )
+
 
 class OCPCrocoGenericTest(unittest.TestCase):
     def setUp(self):

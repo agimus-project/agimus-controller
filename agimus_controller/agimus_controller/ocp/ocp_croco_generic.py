@@ -584,6 +584,19 @@ class CostModelSumItem:
     update: bool = False
     publish_residual: bool = False
 
+    def __post_init__(self):
+        # Collision costs update the scalar cost weight, not the activation.
+        if (
+            self.update
+            and not isinstance(self.cost.residual, ResidualDistanceCollisionBase)
+            and not hasattr(self.cost.activation, "update")
+        ):
+            raise ValueError(
+                f"Cost '{self.name}' has update: true, so its activation must "
+                "take weights (e.g. ActivationModelWeightedQuad), got "
+                f"{type(self.cost.activation).__name__}."
+            )
+
 
 @dataclasses.dataclass
 class ConstraintModel:
