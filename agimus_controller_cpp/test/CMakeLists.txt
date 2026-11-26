@@ -26,6 +26,7 @@ set(AGIMUS_TESTS
     test_ocp
     test_ocp_params
     test_robot_models
+    test_robot_models_more
     test_rt_harness
     test_trajectory_buffer
     test_trajectory_point
@@ -44,10 +45,21 @@ get_filename_component(
     "${example-robot-data_INCLUDE_DIRS}/../share/example-robot-data"
     ABSOLUTE
 )
+# Fixtures of test_robot_models(_more): their own translation unit, to keep
+# each test file under the compile-RAM limit.
+add_library(agimus_robot_models_fixtures STATIC robot_models_fixtures.cpp)
+target_link_libraries(
+    agimus_robot_models_fixtures
+    PUBLIC agimus_controller_cpp doctest::doctest
+)
 target_compile_definitions(
-    test_robot_models
+    agimus_robot_models_fixtures
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
+target_compile_options(agimus_robot_models_fixtures PRIVATE -Wall -Wextra)
+foreach(test_name test_robot_models test_robot_models_more)
+    target_link_libraries(${test_name} PRIVATE agimus_robot_models_fixtures)
+endforeach()
 
 # Panda fixtures of test_ocp and test_cost_updater: their own translation
 # unit, to keep each test file under the compile-RAM limit.
