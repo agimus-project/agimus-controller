@@ -1,38 +1,49 @@
 {
+  lib,
   stdenv,
   python3Packages,
-  lib,
   agimus-controller,
-  fetchFromGitHub ? null,
-  ...
 }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "agimus-controller-doc";
   version = "0.1.0";
 
-  src = ./.;
+  src = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.unions [
+      ./docs
+    ];
+  };
 
-  buildInputs = with python3Packages; [
+  nativeBuildInputs = with python3Packages; [
+    python
     sphinx
     sphinx-rtd-theme
     myst-parser
     sphinx-autodoc-typehints
   ];
 
+  # Needed at build time so that sphinx autodoc can import the module.
+  buildInputs = [ agimus-controller ];
+
   buildPhase = ''
-    mkdir -p _build/html
-    sphinx-build -b html ${src}/docs _build/html
+    runHook preBuild
+    sphinx-build -b html docs _build/html
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p $out/share/doc/${pname}
-    cp -r _build/html $out/share/doc/${pname}/html
+    runHook preInstall
+    mkdir -p $out/share/doc/${finalAttrs.pname}
+    cp -r _build/html $out/share/doc/${finalAttrs.pname}/html
+    runHook postInstall
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Sphinx HTML documentation for agimus_controller";
-    license = licenses.bsd3;
-    platforms = platforms.unix;
+    license = lib.licenses.bsd3;
+    # Follows agimus-controller, which nix-ros-overlay only provides on linux.
+    inherit (agimus-controller.meta) platforms;
   };
-}
+})

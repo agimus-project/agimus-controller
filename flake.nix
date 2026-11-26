@@ -16,29 +16,26 @@
         imports = [
           inputs.gepetto.flakeModule
           {
-            flakoboros.rosOverrideAttrs = {
-              agimus-controller = _: _: {
-                src = lib.fileset.toSource {
-                  root = ./.;
-                  fileset = lib.fileset.unions [
-                    ./agimus_controller
-                  ];
-                };
+            flakoboros = {
+              rosPackages = {
+                agimus-controller-doc = ./agimus_controller_doc/default.nix;
               };
-              agimus-controller-ros = _: _: {
-                src = lib.fileset.toSource {
-                  root = ./.;
-                  fileset = lib.fileset.unions [
-                    ./agimus_controller_ros
-                  ];
+              rosOverrideAttrs = {
+                agimus-controller = _: {
+                  src = lib.fileset.toSource {
+                    root = ./.;
+                    fileset = lib.fileset.unions [
+                      ./agimus_controller
+                    ];
+                  };
                 };
-              };
-              agimus-controller-doc = _: _: {
-                src = lib.fileset.toSource {
-                  root = ./.;
-                  fileset = lib.fileset.unions [
-                    ./agimus_controller_doc
-                  ];
+                agimus-controller-ros = _: {
+                  src = lib.fileset.toSource {
+                    root = ./.;
+                    fileset = lib.fileset.unions [
+                      ./agimus_controller_ros
+                    ];
+                  };
                 };
               };
             };

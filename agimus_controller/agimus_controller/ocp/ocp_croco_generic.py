@@ -738,7 +738,7 @@ class CostModelResidual(CostModel):
     Common activations:
     - Quadratic: φ(r) = 0.5 * r^T W r (default if activation=None)
     - Weighted Quadratic: φ(r) = 0.5 * r^T diag(w) r
-    - Exponential: φ(r) ≈ exp(α |r|) for smooth barrier functions
+    - Exponential: ``φ(r) ≈ exp(α |r|)`` for smooth barrier functions
 
     The `build()` method creates the Crocoddyl cost, and `update()` sets
     the reference and weights from trajectory points.
