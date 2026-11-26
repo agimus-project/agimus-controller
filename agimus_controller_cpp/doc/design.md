@@ -262,10 +262,11 @@ own object, because references differ per node.
     `make_solver(problem, params)`, which returns a
     `std::shared_ptr<crocoddyl::SolverAbstract>`. Today it creates
     `mim_solvers::SolverCSQP` and applies every setting as in
-    `PY/ocp_base_croco.py:64-81`. This is the only place that names CSQP.
-    `Ocp` reads xs and us through `SolverAbstract`, and the gains through a
-    pointer to the solver's `K` vector taken at setup. Another solver (T10.6)
-    then means a new branch in `make_solver`, and nothing else changes;
+    `PY/ocp_base_croco.py:64-81`. `Ocp` reads xs and us through
+    `SolverAbstract`. KKT, `qp_iters`, `max_solve_time` and the gains are not
+    in `SolverAbstract`, so `Ocp` also keeps a `SolverCSQP*` (cast once at
+    setup) and a pointer to its `K`. Another solver (T10.6) means a new
+    branch in `make_solver` and in that cast;
   - sizes results and debug data;
   - with `callbacks == true`, adds the verbose callback. Callbacks print, so
     they are not RT; document this.
@@ -278,6 +279,11 @@ own object, because references differ per node.
   solves with `solver_iters` and `max_solve_time`, then copies the solver's
   xs, us and K into the results and, if `use_debug_data`, fills the debug
   data (`PY/ocp_base_croco.py:134-183`, `PY/ocp/ocp_croco_generic.py:827-853`).
+  Wrong sizes return false without solving (crocoddyl would throw). Debug
+  residuals need Euler nodes over `FreeFwdDynamics` (other node types throw
+  at setup until P6/P8 add them); `running_updaters` may be empty
+  (hand-built problems). The `kControlGrav` debug reference is empty (B4;
+  Python publishes the unused `robot_effort`).
 - `bool solve_without_limits(...)` takes the same arguments with 1000
   iterations and no timeout. It is the initial solve, so it is setup, not
   `@rt`.
@@ -293,6 +299,9 @@ own object, because references differ per node.
   - `/// @rt void set_geometry_placement(pinocchio::GeomIndex, const pinocchio::SE3&, pinocchio::GeometryType)`
     updates `OcpModels::geometry`, which is also the colmpc state's
     geometry model when that state is used (`PY/ocp_base_croco.py:110-133`).
+    `VISUAL` is not supported: the OCP holds no visual model (Python updates
+    `RobotModels`' visual model, which the OCP never reads);
+    `geometry_index(..., VISUAL)` throws.
 - Input transforms (visual servoing):
   - `input_transforms()` returns the list of (parent, child) name pairs (setup);
   - `/// @rt void set_input_transform(std::size_t i, const pinocchio::SE3&)`;
@@ -315,14 +324,28 @@ struct CostUpdater {
   crocoddyl::CostItem* item;                       // weight, for kCollisionWeight
   crocoddyl::ResidualModelAbstract* residual;      // static_cast per rule
   crocoddyl::ActivationModelWeightedQuad* activation;  // nullptr if not weighted-quad
+  const pinocchio::Model* model;                   // frame lookup (frame_from_trajectory)
   FrameName frame_name;                            // fixed frame, or cache key
   pinocchio::FrameIndex frame_id;
   bool frame_from_trajectory = false;              // Python non-Static residuals
+  bool toggles_active = true;                      // B10; false if inactive at setup
   std::size_t transform_index;                     // kVisualServoing
+  Eigen::VectorXd reference_buffer, weights_buffer;  // sized at setup (crocoddyl takes const VectorXd&)
 };
 struct NodeUpdater { std::vector<CostUpdater> costs; /* + soft contact in P8 */ };
-/// @rt Status apply(const NodeUpdater&, const WeightedTrajectoryPoint&, const InputTransforms&);
+/// @rt Status apply(NodeUpdater&, const WeightedTrajectoryPoint&, const InputTransforms&);
+// Setup: finds the cost by name, checks residual and activation against the
+// rule, resolves the frame; throws std::invalid_argument naming the cost.
+CostUpdater make_cost_updater(UpdateRule, crocoddyl::CostModelSum&,
+    std::string_view cost_name, const pinocchio::Model&,
+    std::string_view frame = {}, bool frame_from_trajectory = false,
+    std::size_t transform_index = 0);
 ```
+
+`apply` takes a non-const `NodeUpdater`: it updates the frame cache. With a
+fixed frame, the residual must already point at `frame`; with
+`frame_from_trajectory`, `frame` stays empty. For `kVisualServoing`, `frame`
+is the robot frame and the input key is `frame + "_vs"`.
 
 Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
 
@@ -361,7 +384,19 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   cost adds nothing to the value, gradient or Hessian, so the solution is
   unchanged, but crocoddyl then skips its `calc`/`calcDiff`. Costs that are
   zero in the OCP file (demo 08's terminal `state_reg`) are made inactive at
-  setup in the same way.
+  setup in the same way (`make_cost_updater` for costs with an updater, the
+  builder for the others).
+  - The effective weight is zero when the scalar weight is 0 or every
+    written activation weight is 0. Without a weighted-quad activation only
+    the scalar weight counts (Python ignores the point's weights there).
+  - A cost inactive at setup (disabled in the OCP file) is never switched
+    on (`toggles_active = false`); Python never touches `active`.
+  - A cost listed in `residual_costs` (debug, `publish_residual`) is never
+    switched off, so its published residual stays current (T7 builder).
+  - Checked in T4.2: nothing in the solve path reads `nr_` or the name sets
+    (crocoddyl 3.2.1 reads `nr` once, when the differential model is
+    built); the solution with an item switched off through `active` equals,
+    to the bit, the one with the cost disabled at setup.
   - **RT constraint:** crocoddyl 3.2's `CostModelSum::changeCostStatus`
     allocates: it inserts into and erases from a `std::set<std::string>`,
     and the call builds a `std::string`. The updater must therefore not

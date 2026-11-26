@@ -147,6 +147,7 @@ design.md with a test):
 | A16 | ROS:554 | debug topic publishes the uncompensated x0 | not ported; report upstream |
 | A17 | robot_model.py:282-284 | `coal.Capsule(radius, halfLength)`: coal's second argument is the full length, so each capsule is half as long as the cylinder it replaces (collision avoidance on too-short links). Found in T3.1 | pass `2 * halfLength` (B20); ported as in Python until ruled |
 | A18 | ocp_base_croco.py:187-189, mpc.py:76-80 | `integrate` returns `runningDatas[0].xnext`, a view into crocoddyl's data; the state keeps slices of it, so the next solve overwrites the state with node 0's prediction. In ROS (`agimus_controller.py:529-532`, `constant_delay`) the `initial_state` sent with the next control and the feedback's x0 are wrong. Found in T4.1 | `return data.xnext.copy()` upstream; C++ `Mpc::integrate` writes into the `RobotState` (not affected). G10a's generator copies q, v after `integrate` |
+| A19 | ocp_croco_generic.py:232,286,340,415 (`*Static` `update`), :455 (visual servoing) | assert `len(end_effector_poses) == 1`, which contradicts their "multi end effector support" docstring. Found in T4.2 | C++ looks the frame up by name (design.md); B-row pending with the other rulings |
 
 Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
 `clear_past`; covered by the C++ rolling check (B7).
@@ -217,3 +218,31 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   instead of random ones; G4 also stores a recomputed solution (max
   difference to the pickle 1.6e-11).
 - Open: A18 for the user.
+
+## T4.2 `Ocp` and cost updaters: done (3ffda17, 05474e2), R3 open
+- 123/123 in A and B (supervisor reran both). G4: states 9.2e-14, K 1.6e-11,
+  us 8.2e-12 against the pickle (tolerance 1e-6), exact against the
+  recomputed solution, 33 iterations as Python.
+- B10 checked: nothing reads `nr_` or the name sets; toggling through
+  `CostItem::active` gives the same solution to the bit; RT-safe.
+- **R3, escalated to the user:** both `RtOcp.solve` tick tests allocate on
+  every solve inside crocoddyl, mim_solvers and libgomp (rt_safety.md,
+  Known violations). Marked `may_fail`; every other `Rt*` test is green.
+- Rulings (design.md updated): `apply(NodeUpdater&)`; `CostUpdater` gains
+  `model`, `toggles_active` and two setup-sized buffers;
+  `make_cost_updater` (setup factory); `Ocp` keeps a `SolverCSQP*` and a
+  pointer to `K`; `solve` returns false on wrong sizes; no VISUAL geometry;
+  B10 never switches on a cost disabled at setup, and never switches off a
+  cost in `residual_costs` (T7 implements the latter in the builder).
+- Deviations: `test/panda_ocp.{hpp,cpp}` (shared fixtures, own library) to
+  stay under 2 GB per file. Supervisor follow-ups (b03ebf8, 21bdd15):
+  `test_robot_models.cpp` was at 2,097,600 kB (over the limit since T3.1),
+  now split (1.85 GB and 1.70 GB); `check_rt_coverage` accepts a test name
+  wrapped onto the next line.
+- Upstream reports to file (crocoddyl): `ActivationModelWeightedQuad::Arr_`
+  exists only without `NDEBUG` (class layout differs between a Release
+  crocoddyl and a Debug consumer, and the debug assert reads a stale `Arr_`
+  after `set_weights`); `new_weights_` lives in the model while `Arr` lives
+  in each data (only the first data sees new weights); the CMake config
+  links OpenMP without `find_dependency(OpenMP)`.
+- Open: the R3 patches (user); A19.

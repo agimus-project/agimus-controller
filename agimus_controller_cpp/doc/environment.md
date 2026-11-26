@@ -223,3 +223,13 @@ skipped tests are the `agimus_franka_description` ones in `test_robot_models.py`
 Both sides come from the same gepetto/nix revision, so no minor version
 differs and the golden tolerances in design.md apply as written. The
 container differs only in patch versions (crocoddyl 3.2.0, coal 3.0.3).
+
+## Notes on dependencies
+
+- crocoddyl's installed CMake config links `OpenMP::OpenMP_CXX` without
+  looking it up: `find_package(OpenMP COMPONENTS CXX)` must come before
+  `find_package(crocoddyl)` (in `CMakeLists.txt` and in our package config).
+- Compile RAM: `<pinocchio/multibody/geometry.hpp>` alone takes about
+  1.2 GB with pinocchio 4 (`-O3 -g`); the headers of `test_robot_models`
+  take 1.56 GB. Shared test fixtures go in their own static library to keep
+  each file under 2 GB.
