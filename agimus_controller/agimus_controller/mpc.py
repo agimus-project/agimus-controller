@@ -81,7 +81,7 @@ class MPC(object):
                 self._underrun_logged = True
         else:
             t_traj_ns = None
-            if len(self._buffer) < self._ocp.n_controls + 1:
+            if len(self._buffer) <= self._buffer.horizon_indexes[-1]:
                 return None
             reference_trajectory = self._extract_horizon_from_buffer()
 
