@@ -272,3 +272,22 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   `generate`; a wrong-size `update_previous_solution` is ignored; the
   shift constructor checks the params.
 - Compile RAM: test_warm_start.cpp 1.72 GB, warm_start.cpp 1.65 GB.
+
+## Upstream Python fix PRs (2026-11-26)
+One draft PR per audit finding, against agimus-controller `main` (user
+ruling), each with a regression test where one fits. The user decides each
+A-ruling through these PRs.
+
+| Finding | PR | Finding | PR | Finding | PR |
+|---|---|---|---|---|---|
+| A2 | #352 | A10 | #345 | A18 | #348 |
+| A4 | #347 | A11 | #354 | B3 | #349 |
+| A5 | #341 | A13 | #353 | B4 | #338 |
+| A6 | #346 | A14 | #336 | B5 | #335 |
+| A7 | #342 | A15 | #339 | B6 | #355 |
+| A8 | #340 | A16 | #351 | B7 | #350 |
+| A9 | #344 | A17 | #337 | B8 | #343 |
+
+A1, A12 and B2 were raised on PR #328 (comment and two suggestions); B1 and
+A3 are fixed or used there. Upstream real-time fixes for the R3 sites
+(crocoddyl, mim_solvers) are being prepared (user ruling: upstream PRs).
