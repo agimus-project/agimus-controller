@@ -697,7 +697,7 @@ class DifferentialActionModelFreeFwdDynamics(DifferentialActionModel):
             DifferentialActionModelFreeFwdDynamics = (
                 crocoddyl.DifferentialActionModelFreeFwdDynamics
             )
-        if self.constraints is None:
+        if not self.constraints:
             return DifferentialActionModelFreeFwdDynamics(
                 data.state, data.actuation, costs
             )
