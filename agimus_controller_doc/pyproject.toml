@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-=======
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
 [tool.poetry]
 name = "agimus-controller-doc"
 version = "0.1.0"
@@ -18,12 +11,6 @@ sphinx = "^6.0"
 sphinx-rtd-theme = "*"
 myst-parser = "*"
 sphinx-autodoc-typehints = "*"
-<<<<<<< HEAD
-agimus-controller = {path = "../agimus_controller"}
-
-[tool.poetry.scripts]
-agimus-docs-build = "agimus_controller_doc.cli:build"
-=======
 
 [tool.poetry.scripts]
 agimus-docs-build = "agimus_controller_doc.cli:build"
@@ -31,4 +18,3 @@ agimus-docs-build = "agimus_controller_doc.cli:build"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
