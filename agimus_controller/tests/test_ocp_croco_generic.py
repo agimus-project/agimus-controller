@@ -4,6 +4,7 @@ import example_robot_data
 import unittest
 import crocoddyl
 import pinocchio
+import yaml
 
 from agimus_controller.trajectory import (
     TrajectoryPoint,
@@ -111,6 +112,16 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
         self.assertAlmostEqual(
             cdata.costs.costs["control"].cost, np.sum(0.5 * w * (u - uref) ** 2)
         )
+
+    def test_load_traj_tracking_collision_avoidance_yaml(self):
+        yaml_file = ocp_croco_generic.OCPCrocoGeneric.get_default_yaml_file(
+            "ocp_traj_tracking_collision_avoidance.yaml"
+        )
+        with open(yaml_file, "r") as f:
+            problem = ocp_croco_generic.ShootingProblem(**yaml.safe_load(f))
+        residual = problem.running_model.differential.constraints[0].constraint.residual
+        self.assertIsInstance(residual, ocp_croco_generic.ResidualDistanceCollision)
+        self.assertEqual(len(residual.collision_pair), 2)
 
 
 class OCPCrocoGenericTest(unittest.TestCase):

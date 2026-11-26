@@ -44,7 +44,7 @@ running_model:
           alpha: 1e-4 # 1cm squared
         residual:
           class: ResidualDistanceCollision
-          collision_pair_id: 0
+          collision_pair: [fer_link7_sc_capsule_0, obstacle1_capsule_0]
     constraints:
     - name: collision
       constraint:
@@ -53,7 +53,7 @@ running_model:
         upper: inf
         residual:
           class: ResidualDistanceCollision
-          collision_pair_id: 0
+          collision_pair: [fer_link7_sc_capsule_0, obstacle1_capsule_0]
 
 
 terminal_model:
@@ -92,4 +92,4 @@ terminal_model:
           alpha: 1e-4 # 1cm squared
         residual:
           class: ResidualDistanceCollision
-          collision_pair_id: 0
+          collision_pair: [fer_link7_sc_capsule_0, obstacle1_capsule_0]
