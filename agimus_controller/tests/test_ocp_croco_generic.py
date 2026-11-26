@@ -6,6 +6,7 @@ import crocoddyl
 import pinocchio
 
 from agimus_controller.trajectory import (
+    TrajectoryBuffer,
     TrajectoryPoint,
     TrajectoryPointWeights,
     WeightedTrajectoryPoint,
@@ -219,6 +220,92 @@ class OCPCrocoGenericTest(unittest.TestCase):
             0.0,
             places=1,
         )
+
+
+class OCPCrocoGenericRollingBufferTest(unittest.TestCase):
+    def setUp(self):
+        robot = example_robot_data.load("panda")
+        urdf_path = Path(robot.urdf)
+        self.robot_models = RobotModels(
+            RobotModelParameters(
+                robot_urdf=urdf_path,
+                urdf_meshes_dir=urdf_path.parent.parent.parent.parent.parent,
+                moving_joint_names=[f"panda_joint{i}" for i in range(1, 8)],
+            )
+        )
+        self.yaml_file = ocp_croco_generic.OCPCrocoGeneric.get_default_yaml_file(
+            "ocp_goal_reaching.yaml"
+        )
+
+    def ocp_params(self, factors, n_steps):
+        return OCPParamsBaseCroco(
+            dt=0.01,
+            horizon_size=sum(n_steps),
+            dt_factor_n_seq=DTFactorsNSeq(factors=factors, n_steps=n_steps),
+            solver_iters=1,
+        )
+
+    def test_rejects_non_unit_dt_factors(self):
+        with self.assertRaises(ValueError):
+            ocp_croco_generic.OCPCrocoGeneric(
+                self.robot_models,
+                self.ocp_params(factors=[1, 2], n_steps=[3, 2]),
+                yaml_file=self.yaml_file,
+                expect_rolling_buffer=True,
+            )
+
+    def test_references_match_full_update(self):
+        params = self.ocp_params(factors=[1], n_steps=[5])
+        rolling = ocp_croco_generic.OCPCrocoGeneric(
+            self.robot_models,
+            params,
+            yaml_file=self.yaml_file,
+            expect_rolling_buffer=True,
+        )
+        full = ocp_croco_generic.OCPCrocoGeneric(
+            self.robot_models, params, yaml_file=self.yaml_file
+        )
+        nq = self.robot_models.robot_model.nq
+        nv = self.robot_models.robot_model.nv
+        buffer = TrajectoryBuffer(params.dt_factor_n_seq)
+        for i in range(20):
+            buffer.append(
+                WeightedTrajectoryPoint(
+                    TrajectoryPoint(
+                        robot_configuration=np.full(nq, 0.01 * i),
+                        robot_velocity=np.zeros(nv),
+                        robot_effort=np.zeros(nv),
+                        end_effector_poses={"panda_hand_tcp": pinocchio.SE3.Identity()},
+                    ),
+                    TrajectoryPointWeights(
+                        w_robot_configuration=np.ones(nq),
+                        w_robot_velocity=np.ones(nv),
+                        w_robot_effort=np.ones(nv),
+                        w_end_effector_poses={"panda_hand_tcp": np.ones(6)},
+                    ),
+                )
+            )
+
+        # Number of points the buffer advances before each tick: one point per
+        # tick, a skipped tick, and a tick without a new point.
+        for advance in [0, 1, 1, 2, 0, 1]:
+            for _ in range(advance):
+                buffer.clear_past()
+            rolling.set_reference_weighted_trajectory(buffer.horizon)
+            full.set_reference_weighted_trajectory(buffer.horizon)
+            for node, (rolling_model, full_model) in enumerate(
+                zip(rolling._problem.runningModels, full._problem.runningModels)
+            ):
+                np.testing.assert_array_equal(
+                    rolling_model.differential.costs.costs[
+                        "state_reg"
+                    ].cost.residual.reference,
+                    full_model.differential.costs.costs[
+                        "state_reg"
+                    ].cost.residual.reference,
+                    err_msg=f"node {node} after advancing {advance}",
+                )
+                self.assertEqual(rolling_model.dt, full_model.dt)
 
 
 if __name__ == "__main__":

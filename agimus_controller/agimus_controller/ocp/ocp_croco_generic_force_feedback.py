@@ -223,6 +223,7 @@ class OCPCrocoForceFeedbackGeneric(OCPCrocoGeneric):
         yaml_file: T.Union[str, T.IO],
         expect_rolling_buffer: bool = False,
     ) -> None:
+        self.check_rolling_buffer_params(expect_rolling_buffer, ocp_params)
         with open(yaml_file, "r") as f:
             data = yaml.safe_load(f)
         self._data = ShootingProblem(**data)

@@ -769,6 +769,7 @@ class OCPCrocoGeneric(OCPBaseCroco):
         yaml_file: T.Union[str, T.IO],
         expect_rolling_buffer: bool = False,
     ) -> None:
+        self.check_rolling_buffer_params(expect_rolling_buffer, params)
         with open(yaml_file, "r") as f:
             data = yaml.safe_load(f)
         self._data = ShootingProblem(**data)
@@ -778,6 +779,20 @@ class OCPCrocoGeneric(OCPBaseCroco):
         self._expect_rolling_buffer = expect_rolling_buffer
         self._first_call = True
         self.init_debug_data_attributes()
+
+    @staticmethod
+    def check_rolling_buffer_params(
+        expect_rolling_buffer: bool, params: OCPParamsBaseCroco
+    ) -> None:
+        # Rolling moves node 0 (and its dt) to the end and assumes that the
+        # buffer advances by one point per node: every dt factor must be 1.
+        if expect_rolling_buffer and any(
+            factor != 1 for factor in params.dt_factor_n_seq.factors
+        ):
+            raise ValueError(
+                "expect_rolling_buffer requires all dt factors to be 1, got "
+                f"{params.dt_factor_n_seq.factors}."
+            )
 
     @property
     def _build_data(self) -> BuildData:
@@ -863,7 +878,20 @@ class OCPCrocoGeneric(OCPBaseCroco):
 
         # Modify running costs reference and weights
         if self._expect_rolling_buffer:
-            if self._first_call:
+            # Rolling is only valid if the horizon moved by exactly one point
+            # since the previous call. Otherwise, update every node.
+            shifted_by_one = not self._first_call and all(
+                new is previous
+                for new, previous in zip(
+                    reference_weighted_trajectory[:-2],
+                    self._previous_reference_weighted_trajectory[1:-1],
+                )
+            )
+            if shifted_by_one:
+                problem.circularAppend(
+                    problem.runningModels[0], problem.runningDatas[0]
+                )
+            else:
                 for running_model, ref_weighted_pt in zip(
                     problem.runningModels, reference_weighted_trajectory[:-1]
                 ):
@@ -871,8 +899,9 @@ class OCPCrocoGeneric(OCPBaseCroco):
                         self._build_data, running_model, ref_weighted_pt
                     )
                 self._first_call = False
-            else:
-                problem.circularAppend(problem.runningModels[0])
+            self._previous_reference_weighted_trajectory = list(
+                reference_weighted_trajectory
+            )
 
             self._data.running_model.update(
                 self._build_data,
