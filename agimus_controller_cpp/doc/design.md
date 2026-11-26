@@ -444,6 +444,10 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   (P7) is described in ocp_files.md.
 - Both apply `robot_models.armature()` to every differential model, and set
   the per-node dt from `OcpParams::timesteps` and dt 0 on the terminal model.
+- `build_goal_reaching_models` leaves `geometry` null and `reference_costs`
+  and `residual_costs` empty (Python's goal-reaching class has no debug
+  references). Every node, terminal included, follows the frame of its own
+  reference point (A4), and the state weights have size `ndx` (A6).
 
 ## Warm starts (`warm_start.hpp`)
 

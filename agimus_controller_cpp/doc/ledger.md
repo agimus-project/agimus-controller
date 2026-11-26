@@ -134,7 +134,7 @@ design.md with a test):
 | A3 | mpc.py:32 | `current_time_ns` ignored | drop the parameter from `Mpc::run` (B11) |
 | A4 | ocp_croco_goal_reaching.py:206 | terminal cost uses the last running node's `ee_id` | fix in T4.3 (B12) |
 | A5 | force_feedback.py:185-214 | `force_lb/ub` ignored without constraints | fix in P8 (B13) |
-| A6 | ocp_croco_goal_reaching.py:18-20,82-84 | state weights sized `nq+nv`, not `ndx` | fix in T4.3 (B14); panda has nq == nv, so G5 is unaffected |
+| A6 | ocp_croco_goal_reaching.py:18-20,82-84 | state weights sized `nq+nv`, not `ndx`: for `nq != nv` Python cannot build the OCP (crocoddyl's size check on the cost) | fix in T4.3 (B14); panda has nq == nv, so G5 is unaffected |
 | A7 | ws_shift_force_feedback.py:192-195 | dict used as a `Force` | fix in P8 (B15) |
 | A8 | force_feedback.py:40,149-150 | default tuple used as a numpy mask | fix in P8 (B16) |
 | A9 | ocp_croco_generic.py:700, force_feedback.py:104 | `constraints is None` never true: empty manager always attached | C++ attaches a manager only with constraints; check parity in T7.4 |
@@ -246,3 +246,16 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   in each data (only the first data sees new weights); the CMake config
   links OpenMP without `find_dependency(OpenMP)`.
 - Open: the R3 patches (user); A19.
+
+## T4.3 Goal-reaching builder: done (4c9e924)
+- `build_goal_reaching_models` (ocp_builders.hpp): G5 parity exact (xs, us,
+  K0, kkt all 0 error; 40 iterations, 25 QP iterations). 129/129 in A and B
+  (supervisor reran both).
+- A4 and A6 implemented as the C++ semantics (terminal node follows its own
+  point's frame; state weights of size `ndx`), each with a test showing the
+  difference from Python (A6 on a tiny free-flyer robot, nq 9, nv 8).
+  Upstream PRs propose the same fixes; the user may still rule otherwise.
+- 20 ticks of reference + solve on the built Ocp: references RT-safe, the
+  solve not RT-checked (rt_safety.md, Known violations).
+- Deviation: an armature not of size `nv` throws (setup error).
+- Compile RAM: `test_ocp_builders.cpp` 1.82 GB, close to the limit.
