@@ -212,6 +212,14 @@ class IAMSoftContactAugmented(IntegratedActionModelAbstract):
                 f"Value has {len(self.force_lb)} elements, while should have {force_dimension}"
             )
             self.force_lb = np.array(self.force_lb)
+
+        # The force box constraint is only evaluated by the IAM when
+        # `with_force_constraint` is set, and the IAM puts the bounds in its
+        # `g_lb`/`g_ub` itself. This also holds when the DAM has no constraint.
+        if np.isfinite(self.force_lb).any() or np.isfinite(self.force_ub).any():
+            iam.with_force_constraint = True
+            iam.force_lb = self.force_lb
+            iam.force_ub = self.force_ub
         return iam
 
 
