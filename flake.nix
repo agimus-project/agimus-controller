@@ -38,6 +38,27 @@
             devShells.cpp = pkgs.mkShell {
               inputsFrom = [ self'.packages.agimus-controller-cpp ];
             };
+            # `nix develop .#py-judge`: the Python package from source, to
+            # run its tests and generate the C++ golden files (T0.2, T4.1).
+            devShells.py-judge = pkgs.mkShell {
+              packages = [
+                (pkgs.python3.withPackages (ps: [
+                  ps.coal
+                  ps.colmpc
+                  ps.crocoddyl
+                  ps.example-robot-data
+                  ps.mim-solvers
+                  ps.numpy
+                  ps.pinocchio
+                  ps.pytest
+                  ps.pyyaml
+                  ps.tomli-w
+                ]))
+              ];
+              shellHook = ''
+                export PYTHONPATH="$PWD/agimus_controller''${PYTHONPATH:+:$PYTHONPATH}"
+              '';
+            };
           };
       }
     );
