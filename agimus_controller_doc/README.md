@@ -11,7 +11,7 @@ pip install -r docs/requirements.txt
 2. Build HTML:
 
 ```bash
-make html
+sphinx-build -b html docs docs/_build/html
 # Output is in _build/html
 ```
 
