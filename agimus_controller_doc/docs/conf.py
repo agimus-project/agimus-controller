@@ -4,7 +4,7 @@ from datetime import datetime
 
 # Compute and add repository root to sys.path so autodoc can import
 # the `agimus_controller` package regardless of current working dir.
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, ROOT)
 
 # When building docs in CI or on developer machines the environment may not
