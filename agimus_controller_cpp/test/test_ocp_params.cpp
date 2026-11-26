@@ -196,12 +196,9 @@ TEST_CASE("OcpParams: golden set G1, n_controls and timesteps") {
   }
 }
 
-// Skipped pending a supervisor ruling (T4.1 report): Python >= 3.12's sum()
-// of floats is compensated (Neumaier), so Python's total_time is not the
-// left-to-right sum that finalize() computes; all three cases differ by 1-2
-// ulp. Do not loosen: either finalize() reproduces Python's sum, or the
-// supervisor rules otherwise.
-TEST_CASE("OcpParams: golden set G1, total_time" * doctest::skip()) {
+// finalize() reproduces CPython >= 3.12's compensated float sum, so the
+// comparison is exact (ledger, T4.1 ruling).
+TEST_CASE("OcpParams: golden set G1, total_time") {
   for (const G1Case& g : load_g1()) {
     INFO("number of factors: " << g.params.dt_factor_n_seq.factors.size());
     CHECK(g.params.total_time == *(*g.golden)["total_time"].value<double>());

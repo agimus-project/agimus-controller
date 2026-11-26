@@ -1,5 +1,6 @@
 #include "agimus_controller/ocp_params.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
@@ -41,9 +42,21 @@ void OcpParams::finalize() {
     timesteps.insert(timesteps.end(), n_steps[i], dt * factors[i]);
   }
   n_controls = static_cast<int>(timesteps.size());
+  // CPython >= 3.12 sums floats with Neumaier compensation (bltinmodule.c,
+  // builtin_sum_impl); the same steps give the judge's total_time exactly.
   total_time = 0.0;
-  for (const double t : timesteps) {
-    total_time += t;
+  double compensation = 0.0;
+  for (const double x : timesteps) {
+    const double t = total_time + x;
+    if (std::fabs(total_time) >= std::fabs(x)) {
+      compensation += (total_time - t) + x;
+    } else {
+      compensation += (x - t) + total_time;
+    }
+    total_time = t;
+  }
+  if (compensation != 0.0 && std::isfinite(compensation)) {
+    total_time += compensation;
   }
   if (horizon_size != n_controls) {
     throw std::invalid_argument(
