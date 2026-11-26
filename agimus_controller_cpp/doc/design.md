@@ -473,6 +473,14 @@ class WarmStart {
   integrator over a free-forward-dynamics DAM with empty costs and the
   armature. It shifts its own copy of the previous solution in place.
   Without a previous solution it returns `kNoPreviousSolution`.
+- The `@rt` tags sit on each override (`check_rt_coverage` needs a class
+  name). `generate` returns `kSizeMismatch`, before writing anything, when
+  x0, xs, us, the state or a horizon point has the wrong size. A wrong-size
+  `update_previous_solution` is ignored (it returns void) and the previous
+  solution is kept. The shift constructor throws unless the params are
+  finalized, `timesteps[0] == dt` and every step is at least `dt`.
+- A13: when the last step is longer than `dt`, the shift also advances
+  `xs[N]` by one `dt` with `us.back()`; Python leaves it unchanged.
 - `WarmStartShiftPreviousSolutionForceFeedback` (P8) appends `contact_force`
   restricted to the enabled directions to x0.
 

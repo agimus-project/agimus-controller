@@ -259,3 +259,16 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   solve not RT-checked (rt_safety.md, Known violations).
 - Deviation: an armature not of size `nv` throws (setup error).
 - Compile RAM: `test_ocp_builders.cpp` 1.82 GB, close to the limit.
+
+## T4.4 Warm starts: done (a1326b3)
+- `WarmStartReference`, `WarmStartShiftPreviousSolution`: G2 and G3 exact
+  (0 error), G3 compared everywhere except `xs[N]` (A13). 147/147 in A and
+  B (supervisor reran both).
+- A13 implemented with a test (C++ `xs[N]` = the one-dt step; differs from
+  Python's by 2.86 on G3) and one for the equal-last-step case.
+- All `Rt*` tests green, including the shift with factors {1,2,4}: the
+  crocoddyl integrator `calc` used by the shift does not allocate.
+- Rulings (design.md updated): tags on the overrides; `kSizeMismatch` from
+  `generate`; a wrong-size `update_previous_solution` is ignored; the
+  shift constructor checks the params.
+- Compile RAM: test_warm_start.cpp 1.72 GB, warm_start.cpp 1.65 GB.
