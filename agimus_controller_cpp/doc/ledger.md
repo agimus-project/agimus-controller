@@ -145,6 +145,7 @@ design.md with a test):
 | A14 | robot_model.py:50-62,346-351 | armature validated and ordered by joint name, used by DoF | fix in T3.1 follow-up (B19): map names to `idx_v` |
 | A15 | ocp_param_base.py:11-23 | docstring example backwards | docs only; report upstream |
 | A16 | ROS:554 | debug topic publishes the uncompensated x0 | not ported; report upstream |
+| A17 | robot_model.py:282-284 | `coal.Capsule(radius, halfLength)`: coal's second argument is the full length, so each capsule is half as long as the cylinder it replaces (collision avoidance on too-short links). Found in T3.1 | pass `2 * halfLength` (B20); ported as in Python until ruled |
 
 Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
 `clear_past`; covered by the C++ rolling check (B7).
@@ -155,3 +156,21 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   G1 can compare exactly. Green in configurations A and B (67/67).
 - Deviation: `finalize()` also rejects a NaN `dt` and a `max_solve_time`
   that is not > 0 (setup errors; Python does not check).
+
+## T3.1 `RobotModels`: done
+- All 24 tests of `test_robot_models.py` ported (8 franka ones skipped
+  without `agimus_franka_description` and xacro, as in Python), plus 7 on a
+  tiny URDF: capsule conversion, explicit pairs, SRDF XML filtering, free
+  flyer, environment attachment, broken URDF. Green in A and B (90/90).
+- Rulings:
+  - `appendModel` adds to its output model: the collision call gets a fresh
+    one (Python gets a new model per call).
+  - A capsule replaces the cylinder `<base>_<i>` and the spheres
+    `<base>_<i+1>`, `<base>_<i+2>`; the capsule is appended after the
+    remaining objects.
+- Deviations (setup errors Python lacks): an unknown
+  `robot_attachment_frame` throws (Python attaches to `getFrameId`'s
+  not-found value); a `q0` not of size `nq` throws. A missing file throws
+  `std::runtime_error` (Python: `ValueError`).
+- Open: A14 (armature by name) and A17 (capsule length) wait for the user;
+  both are ported as in Python.
