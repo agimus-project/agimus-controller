@@ -451,3 +451,39 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCapsuleConversion(unittest.TestCase):
+    def test_capsule_has_the_length_of_the_cylinder(self):
+        """A cylinder followed by two spheres is replaced by a capsule as long as the cylinder."""
+        urdf = """<robot name="r">
+  <link name="base"/>
+  <link name="arm">
+    <collision>
+      <geometry><cylinder radius="0.05" length="0.6"/></geometry>
+    </collision>
+    <collision>
+      <geometry><sphere radius="0.05"/></geometry>
+    </collision>
+    <collision>
+      <geometry><sphere radius="0.05"/></geometry>
+    </collision>
+  </link>
+  <joint name="j" type="revolute">
+    <parent link="base"/><child link="arm"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1" upper="1" effort="1" velocity="1"/>
+  </joint>
+</robot>"""
+        params = RobotModelParameters(
+            q0=np.zeros(1),
+            moving_joint_names=["j"],
+            robot_urdf=urdf,
+            collision_as_capsule=True,
+        )
+        models = RobotModels(params)
+        geoms = [obj.geometry for obj in models.collision_model.geometryObjects]
+        self.assertEqual(len(geoms), 1)
+        self.assertIsInstance(geoms[0], coal.Capsule)
+        self.assertAlmostEqual(geoms[0].radius, 0.05)
+        self.assertAlmostEqual(geoms[0].halfLength, 0.3)
