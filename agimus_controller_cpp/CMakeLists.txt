@@ -24,8 +24,13 @@ if(POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif()
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-find_package(pinocchio REQUIRED)
-find_package(coal REQUIRED)
+# Minimums: the oldest version on any supported platform (ledger, T0.5).
+find_package(pinocchio 4.1.0 REQUIRED)
+find_package(coal 3.0.3 REQUIRED)
+# crocoddyl's config links OpenMP::OpenMP_CXX without looking it up.
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+find_package(crocoddyl 3.2.0 REQUIRED)
+find_package(mim_solvers 0.3.0 REQUIRED)
 
 add_library(
     agimus_controller_cpp
@@ -48,7 +53,12 @@ target_include_directories(
 )
 target_link_libraries(
     agimus_controller_cpp
-    PUBLIC Eigen3::Eigen coal::coal pinocchio::pinocchio
+    PUBLIC
+        Eigen3::Eigen
+        coal::coal
+        crocoddyl::crocoddyl
+        mim_solvers::mim_solvers
+        pinocchio::pinocchio
 )
 target_compile_options(agimus_controller_cpp PRIVATE -Wall -Wextra -Wpedantic)
 if(AGIMUS_CONTROLLER_RT_CHECKS)

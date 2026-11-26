@@ -11,7 +11,9 @@
   <buildtool_depend>cmake</buildtool_depend>
 
   <depend>coal</depend>
+  <depend>crocoddyl</depend>
   <depend>eigen</depend>
+  <depend>mim_solvers</depend>
   <depend>pinocchio</depend>
 
   <test_depend>doctest</test_depend>

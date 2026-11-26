@@ -2,8 +2,12 @@
 
 include(CMakeFindDependencyMacro)
 find_dependency(Eigen3 3.3 NO_MODULE)
-find_dependency(coal)
-find_dependency(pinocchio)
+find_dependency(coal 3.0.3)
+# crocoddyl's config links OpenMP::OpenMP_CXX without looking it up.
+find_dependency(OpenMP COMPONENTS CXX)
+find_dependency(crocoddyl 3.2.0)
+find_dependency(mim_solvers 0.3.0)
+find_dependency(pinocchio 4.1.0)
 
 include("${CMAKE_CURRENT_LIST_DIR}/agimus_controller_cppTargets.cmake")
 check_required_components(agimus_controller_cpp)

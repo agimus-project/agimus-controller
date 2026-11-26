@@ -3,9 +3,11 @@
   stdenv,
   cmake,
   coal,
+  crocoddyl,
   doctest,
   eigen,
   example-robot-data,
+  mim-solvers,
   pinocchio,
   python3,
   tomlplusplus,
@@ -30,7 +32,9 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [ cmake ];
   propagatedBuildInputs = [
     coal
+    crocoddyl
     eigen
+    mim-solvers
     pinocchio
   ];
   checkInputs = [
