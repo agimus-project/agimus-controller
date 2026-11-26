@@ -24,6 +24,7 @@ set(AGIMUS_TESTS
     test_fixed_capacity
     test_mpc_data
     test_ocp
+    test_ocp_builders
     test_ocp_params
     test_robot_models
     test_robot_models_more
@@ -57,7 +58,7 @@ target_compile_definitions(
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
 target_compile_options(agimus_robot_models_fixtures PRIVATE -Wall -Wextra)
-foreach(test_name test_robot_models test_robot_models_more)
+foreach(test_name test_robot_models test_robot_models_more test_ocp_builders)
     target_link_libraries(${test_name} PRIVATE agimus_robot_models_fixtures)
 endforeach()
 
@@ -70,12 +71,12 @@ target_compile_definitions(
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
 target_compile_options(agimus_panda_ocp_fixtures PRIVATE -Wall -Wextra)
-foreach(test_name test_cost_updater test_ocp)
+foreach(test_name test_cost_updater test_ocp test_ocp_builders)
     target_link_libraries(${test_name} PRIVATE agimus_panda_ocp_fixtures)
 endforeach()
 
 # Golden files written by test/golden/generate_golden.py.
-foreach(test_name test_ocp test_ocp_params)
+foreach(test_name test_ocp test_ocp_builders test_ocp_params)
     target_link_libraries(${test_name} PRIVATE tomlplusplus::tomlplusplus)
     target_compile_definitions(
         ${test_name}

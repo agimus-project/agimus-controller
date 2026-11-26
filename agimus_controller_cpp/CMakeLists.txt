@@ -37,6 +37,7 @@ add_library(
     src/cost_updater.cpp
     src/mpc_data.cpp
     src/ocp.cpp
+    src/ocp_builders.cpp
     src/ocp_params.cpp
     src/robot_models.cpp
     src/status.cpp
