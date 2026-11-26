@@ -2,13 +2,36 @@
 
 Recorded on 2026-11-25. Update this file when a dependency changes.
 
-**Build and test with nix** (PR #334): the repository flake gets a C++ shell
-(`nix develop .#cpp`, plain CMake) and a Python judge shell
-(`nix develop .#py-judge`) with the code (branch `cpp-port/basics`). They
-provide every dependency, including the ones the container below lacks
-(doctest, colmpc, force_feedback_mpc). colcon still works, since the package
-is plain CMake. The supported platforms are in PLAN.md, R9; T0.5 records
-their dependency versions.
+**Build and test with nix** (PR #334); colcon still works, since the
+package is plain CMake. The supported platforms are in PLAN.md, R9; T0.5
+records their dependency versions.
+
+## C++ build environment: nix (preferred)
+
+From the repository root (gepetto/nix pinned in `flake.lock`; everything
+except our package comes from the gepetto and NixOS binary caches):
+
+```bash
+nix develop .#cpp                     # C++ only: pinocchio, Eigen, doctest, cmake
+cmake -S agimus_controller_cpp -B build -DCMAKE_BUILD_TYPE=Debug   # configuration A
+cmake --build build -j && (cd build && ctest)
+nix build -L .#agimus-controller-cpp  # configuration B (RelWithDebInfo, -O3 -g) + tests, sandboxed
+```
+
+- **Do not use the default `nix develop`** for C++: it is the whole ROS
+  stack, and if the pinned gepetto/nix revision is not in the cache it
+  compiles ROS from source for hours.
+- When bumping `flake.lock`, check first with
+  `nix build --dry-run .#devShells.x86_64-linux.cpp` that only our own
+  derivations would be built.
+- Versions at gepetto/nix `a2acb49` (2026-11-23): pinocchio 4.1.0,
+  crocoddyl 3.2.1, colmpc 0.4.0, mim-solvers 0.3.0, coal 3.0.4-dev,
+  example-robot-data 5.0.0 (cached); force-feedback-mpc 1.0.1 (not
+  cached: built locally); doctest and toml++ 3.4.0 from nixpkgs; GCC 15.3.
+  colmpc and force-feedback-mpc are therefore available here, unlike in the
+  container. Later phases add them to `package.nix` and to the shell.
+- `nix flake check --no-build` fails on the ROS packages ("path … .drv is
+  not valid"); this predates the C++ package.
 
 ## C++ build environment: workspace_cadmium dev container
 
@@ -55,9 +78,8 @@ colcon test-result --verbose
 ```
 
 `BUILD_TESTING=ON` needs doctest (see above): install `doctest-dev` from a
-network that reaches the PAL apt mirror, or use the nix C++ shell that comes
-with the code (`nix develop .#cpp`, added on branch `cpp-port/basics`, not
-in this plan-only branch). Without doctest, build the library alone
+network that reaches the PAL apt mirror, or use the nix C++ shell (`nix develop .#cpp`,
+see the nix section above). Without doctest, build the library alone
 with `-DBUILD_TESTING=OFF`.
 
 Benchmark and production builds: `-DCMAKE_BUILD_TYPE=Release

@@ -134,8 +134,10 @@ P5–P6 (crocoddyl-toml and the colmpc types) can run in parallel with P2–P4.
 
 ### P0 Environment and judge (supervisor)
 
-- **T0.1 (H) C++ environment.** In the workspace_cadmium dev container (the
-  deployment target; deps live in `/opt/ros/lyrical`), record the version and
+- **T0.1 (H) C++ environment.** Done; nix (`nix develop .#cpp`) has since
+  become the preferred environment, see `doc/environment.md`. In the
+  workspace_cadmium dev container (the deployment target; deps live in
+  `/opt/ros/lyrical`), record the version and
   CMake config path of: Eigen, pinocchio, crocoddyl, coal, mim_solvers (built
   in this workspace), colmpc (C++ library, not just Python), force_feedback_mpc
   (C++), example-robot-data, doctest (its CMake config, which provides
