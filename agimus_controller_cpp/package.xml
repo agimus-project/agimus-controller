@@ -10,10 +10,12 @@
 
   <buildtool_depend>cmake</buildtool_depend>
 
+  <depend>coal</depend>
   <depend>eigen</depend>
   <depend>pinocchio</depend>
 
   <test_depend>doctest</test_depend>
+  <test_depend>example-robot-data</test_depend>
   <test_depend>python3</test_depend>
 
   <export>

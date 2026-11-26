@@ -2,8 +2,10 @@
   lib,
   stdenv,
   cmake,
+  coal,
   doctest,
   eigen,
+  example-robot-data,
   pinocchio,
   python3,
 }:
@@ -26,10 +28,14 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [ cmake ];
   propagatedBuildInputs = [
+    coal
     eigen
     pinocchio
   ];
-  checkInputs = [ doctest ];
+  checkInputs = [
+    doctest
+    example-robot-data
+  ];
   nativeCheckInputs = [ python3 ]; # test/check_rt_coverage.py
 
   # Configuration B of doc/rt_safety.md: optimised, with debug info and the

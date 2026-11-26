@@ -25,11 +25,13 @@ if(POLICY CMP0167)
 endif()
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
+find_package(coal REQUIRED)
 
 add_library(
     agimus_controller_cpp
     src/mpc_data.cpp
     src/ocp_params.cpp
+    src/robot_models.cpp
     src/status.cpp
     src/trajectory_buffer.cpp
     src/trajectory_point.cpp
@@ -46,7 +48,7 @@ target_include_directories(
 )
 target_link_libraries(
     agimus_controller_cpp
-    PUBLIC Eigen3::Eigen pinocchio::pinocchio
+    PUBLIC Eigen3::Eigen coal::coal pinocchio::pinocchio
 )
 target_compile_options(agimus_controller_cpp PRIVATE -Wall -Wextra -Wpedantic)
 if(AGIMUS_CONTROLLER_RT_CHECKS)

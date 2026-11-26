@@ -2,6 +2,7 @@
 
 include(CMakeFindDependencyMacro)
 find_dependency(Eigen3 3.3 NO_MODULE)
+find_dependency(coal)
 find_dependency(pinocchio)
 
 include("${CMAKE_CURRENT_LIST_DIR}/agimus_controller_cppTargets.cmake")
