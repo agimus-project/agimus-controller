@@ -1,3 +1,4 @@
+import bisect
 from copy import deepcopy
 from dataclasses import dataclass
 import numpy as np
@@ -195,6 +196,44 @@ class TrajectoryBuffer(object):
     def clear_past(self):
         if self._buffer:
             self._buffer.pop(0)
+
+    def clear(self):
+        self._buffer.clear()
+
+    def clear_before(self, t_ns: int) -> None:
+        """Drop points whose successor is already at or before trajectory time
+        ``t_ns`` (they can no longer be picked by :meth:`horizon_at`). Always
+        keeps at least one point."""
+        while len(self._buffer) > 1 and self._buffer[1].point.time_ns <= t_ns:
+            self._buffer.pop(0)
+
+    def horizon_at(self, t_ns: int, dt_ns: int):
+        """Reference horizon sampled by *trajectory time* rather than by buffer
+        index: for each offset ``i`` in ``horizon_indexes`` return the buffered
+        point whose ``point.time_ns`` is nearest to ``t_ns + i * dt_ns``.
+
+        This decouples the OCP from the rate at which the trajectory publisher
+        fills the buffer — the reference always advances with wall time, so a
+        publisher running slower (or faster) than the solver no longer makes
+        the trajectory play back at the wrong speed. Assumes ``point.time_ns``
+        is monotonically non-decreasing across the buffer.
+
+        Returns ``(list[WeightedTrajectoryPoint], underrun: bool)`` where
+        ``underrun`` is True if the requested time ran past the last buffered
+        point (the last point is then held)."""
+        times = [wp.point.time_ns for wp in self._buffer]
+        out = []
+        underrun = False
+        for i in self.horizon_indexes:
+            target = t_ns + i * dt_ns
+            j = bisect.bisect_left(times, target)
+            if j >= len(times):
+                j = len(times) - 1
+                underrun = True
+            elif j > 0 and (target - times[j - 1]) <= (times[j] - target):
+                j -= 1
+            out.append(self._buffer[j])
+        return out, underrun
 
     def compute_horizon_indexes(self):
         n_states = sum(sn for sn in self.dt_factor_n_seq.n_steps) + 1

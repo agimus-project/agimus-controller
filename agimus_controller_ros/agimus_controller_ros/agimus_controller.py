@@ -212,6 +212,9 @@ class AgimusController(Node, RobotModelsMixin):
         self.rmodel = None
         self.mpc = None
         self.np_sensor_msg = None
+        # Highest MpcInput.id seen so far — a non-increasing id marks a fresh
+        # reference trajectory (the publisher restarts its counter at 0).
+        self._last_mpc_input_id = -1
         # Stores the OCP result to be able to publish it
         # at next iteration, when using a constant delay
         self._ocp_res = None
@@ -394,10 +397,27 @@ class AgimusController(Node, RobotModelsMixin):
         self.sensor_msg = sensor_msg
 
     def mpc_input_callback(self, msg: MpcInput) -> None:
-        """Fill the new point msg in the trajectory buffer."""
-        w_traj_point = mpc_msg_to_weighted_traj_point(
-            msg, self.get_clock().now().nanoseconds
-        )
+        """Fill the new point msg in the trajectory buffer.
+
+        The point is stamped with its *trajectory* time (``id * ocp.dt``, not
+        the wall-clock arrival time) so that ``MPC.run`` can advance the
+        reference by elapsed wall time instead of one buffer slot per solve.
+        This requires the publisher's sampling period to equal ``ocp.dt``.
+        """
+        dt_ns = int(round(self.ocp_params.dt * 1e9))
+
+        # Detect a restarted reference trajectory (id counter back to/near 0).
+        if msg.id <= self._last_mpc_input_id and len(self.traj_buffer) > 0:
+            self.get_logger().info(
+                f"New reference trajectory (id {msg.id} <= last "
+                f"{self._last_mpc_input_id}) — clearing the buffer."
+            )
+            self.traj_buffer.clear()
+            if self.mpc is not None:
+                self.mpc.reset_playback()
+        self._last_mpc_input_id = msg.id
+
+        w_traj_point = mpc_msg_to_weighted_traj_point(msg, msg.id * dt_ns)
         self.traj_buffer.append(w_traj_point)
         self.params.ocp.effector_frame_name = msg.ee_inputs[0].frame_id
         self.effector_frame_name = msg.ee_inputs[0].frame_id
@@ -427,10 +447,43 @@ class AgimusController(Node, RobotModelsMixin):
     def send_control_msg(self, ocp_res: OCPResults) -> None:
         """Get OCP control output and publish it."""
         assert self.np_sensor_msg is not None
+        # See params.apply_knot's description (MPC command-delay compensation).
+        k = self.params.apply_knot
+        nq = self.rmodel.nq
+        nv = self.rmodel.nv
+        next_states = []
+        if k > 0:
+            # Delay compensation: the LFC applies (u_ff, K) around initial_state
+            # as u = u_ff + K*(x - x0). For knot k that reference must be the
+            # OCP's own predicted state x_k = states[k] (= x_real propagated k
+            # steps by the OCP dynamics), not the raw measurement. Mutate
+            # np_sensor_msg in place — it is rebuilt next cycle and nothing
+            # downstream reads it here (deepcopy chokes on an rclpy Time).
+            xk = ocp_res.states[k]
+            self.np_sensor_msg.joint_state.position = np.asarray(xk[:nq])
+            self.np_sensor_msg.joint_state.velocity = np.asarray(xk[nq : nq + nv])
+        if k + 1 < len(ocp_res.states):
+            # Next knot x_{k+1}, carried on Control.next_states for the LFC's
+            # reference interpolation -- independent of apply_knot/k: even at
+            # k=0 (initial_state == the raw measurement), interpolating
+            # towards the OCP's own states[1] smooths the staircase reference
+            # between MPC solves, decoupled from the knot-shift delay comp
+            # (paper's u2 without u1). Stamped one OCP period after this
+            # cycle's initial_state: the LFC derives the actual interpolation
+            # period from the two stamps, it does not assume a fixed one.
+            x_next = sensor_msg_to_numpy(self.sensor_msg)
+            x_next.stamp = self.np_sensor_msg.stamp + Duration(
+                nanoseconds=round(self.ocp_params.dt * 1e9)
+            )
+            xkn = ocp_res.states[k + 1]
+            x_next.joint_state.position = np.asarray(xkn[:nq])
+            x_next.joint_state.velocity = np.asarray(xkn[nq : nq + nv])
+            next_states = [x_next]
         ctrl_msg = lfc_py_types.Control(
-            feedback_gain=ocp_res.ricatti_gains[0],
-            feedforward=ocp_res.feed_forward_terms[0].reshape(self.rmodel.nv, 1),
+            feedback_gain=ocp_res.ricatti_gains[k],
+            feedforward=ocp_res.feed_forward_terms[k].reshape(nv, 1),
             initial_state=self.np_sensor_msg,
+            next_states=next_states,
         )
         self.control_publisher.publish(control_numpy_to_msg(ctrl_msg))
 
@@ -498,7 +551,10 @@ class AgimusController(Node, RobotModelsMixin):
         # If size is inferior to `1.5 * required size`, send a warning message. Note that the
         # ratio here must be strictly inferior to the ratio that triggers starting.
         # If size is inferior to the required size, send an error message and return.
-        if not self.buffer_has_enough_data(1.5):
+        _mpc_holding = self.mpc is not None and getattr(
+            self.mpc, "_underrun_logged", False
+        )
+        if not self.buffer_has_enough_data(1.5) and not _mpc_holding:
             if self.buffer_has_enough_data(1):
                 self.get_logger().warn(
                     f"MPC is running and the buffer size becomes low. Current size {len(self.traj_buffer)}",
