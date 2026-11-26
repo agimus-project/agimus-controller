@@ -131,7 +131,7 @@ is not done until both are green.
 |---|---|---|
 | A, debug | `CMAKE_BUILD_TYPE=Debug`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | logic errors with full assertions and readable backtraces; run first |
 | B, optimised | `CMAKE_BUILD_TYPE=RelWithDebInfo` (`-O3`), `AGIMUS_CONTROLLER_RT_CHECKS=ON` | bugs that only appear under optimisation: undefined behaviour, aliasing, uninitialised reads; also checks that the RT tests hold when the optimiser elides or merges allocations |
-| C, native | B plus `-march=native`, for **the whole stack** | vectorisation and alignment bugs with AVX |
+| C, native | B plus `CMAKE_BUILD_TYPE=Release` and `-march=native`, for **the whole stack** | vectorisation and alignment bugs with AVX |
 
 Configuration C needs care, because of what happened with moto's aligned
 maps. With AVX, Eigen aligns fixed-size objects such as `Matrix4d` and 6×6
