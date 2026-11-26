@@ -116,6 +116,14 @@ class TestWarmStart(unittest.TestCase):
             np.testing.assert_array_equal(u_init[i - 1], controls[i])
             np.testing.assert_array_equal(x_init[i], d.xnext)
 
+        # The last step (0.2) is longer than dt (0.1): the terminal state must
+        # also be moved forward by dt, using the last control.
+        integrator = ws._integrator
+        data = integrator.createData()
+        integrator.calc(data, states[nu], controls[nu - 1])
+        np.testing.assert_array_equal(x_init[nu], data.xnext)
+        self.assertFalse(np.array_equal(x_init[nu], states[nu]))
+
 
 if __name__ == "__main__":
     unittest.main()
