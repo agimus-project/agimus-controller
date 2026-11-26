@@ -16,26 +16,44 @@
         imports = [
           inputs.gepetto.flakeModule
           {
-            flakoboros.rosOverrideAttrs = {
-              agimus-controller = _: _: {
-                src = lib.fileset.toSource {
-                  root = ./.;
-                  fileset = lib.fileset.unions [
-                    ./agimus_controller
-                  ];
-                };
+            flakoboros = {
+              rosPackages = {
+                agimus-controller-doc = ./agimus_controller_doc/default.nix;
               };
-              agimus-controller-ros = _: _: {
-                src = lib.fileset.toSource {
-                  root = ./.;
-                  fileset = lib.fileset.unions [
-                    ./agimus_controller_ros
-                  ];
+              rosOverrideAttrs = {
+                agimus-controller = _: {
+                  src = lib.fileset.toSource {
+                    root = ./.;
+                    fileset = lib.fileset.unions [
+                      ./agimus_controller
+                    ];
+                  };
+                };
+                agimus-controller-ros = _: {
+                  src = lib.fileset.toSource {
+                    root = ./.;
+                    fileset = lib.fileset.unions [
+                      ./agimus_controller_ros
+                    ];
+                  };
                 };
               };
             };
           }
         ];
+        perSystem =
+          { config, pkgs, ... }:
+          {
+            packages = {
+              agimus-controller-doc = pkgs.callPackage ./agimus_controller_doc/default.nix {
+                inherit (pkgs.rosPackages.humble) agimus-controller;
+              };
+            };
+            checks = {
+              # Build packages during nix flake check
+              inherit (config.packages) agimus-controller-doc;
+            };
+          };
       }
     );
 }
