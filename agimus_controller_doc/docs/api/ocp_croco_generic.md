@@ -2,7 +2,7 @@
 title: OCP Crocoddyl Generic API
 ---
 
-# AGIMUS controller: generic croccodyl OCP
+# AGIMUS controller: generic crocoddyl OCP
 
 
 ## Costs — quick index
