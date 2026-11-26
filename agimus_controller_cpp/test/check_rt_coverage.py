@@ -12,7 +12,7 @@ import re
 import sys
 
 TAG = re.compile(r"///\s*@rt\s+(\S+)")
-TEST = re.compile(r'TEST_CASE(?:_FIXTURE)?\s*\((?:[^,"]*,\s*)?"([^"]+)"')
+TEST = re.compile(r'TEST_CASE(?:_FIXTURE)?\s*\(\s*(?:[^,"]*,\s*)?"([^"]+)"')
 
 
 def expected_prefix(tag: str) -> str:
