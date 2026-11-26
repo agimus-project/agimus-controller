@@ -231,6 +231,57 @@ class TrajectoryBuffer(object):
         self._buffer[index] = value
 
 
+class ConstantTrajectoryBuffer(TrajectoryBuffer):
+    """Reactive trajectory buffer for teleoperation.
+
+    Instead of a sliding FIFO window, every call to .horizon returns N+1 copies
+    of the latest received point.  This forces the MPC to treat the current
+    hand pose as the target for the entire horizon, giving maximum reactivity.
+
+    Interface is identical to TrajectoryBuffer so the controller needs no other
+    changes beyond selecting this class.
+    """
+
+    def __init__(self, dt_factor_n_seq: DTFactorsNSeq):
+        self._latest_point: WeightedTrajectoryPoint | None = None
+        self.dt_factor_n_seq = deepcopy(dt_factor_n_seq)
+        self.horizon_indexes = self.compute_horizon_indexes()
+        self._n_horizon_states = len(self.horizon_indexes)
+
+    def append(self, item: WeightedTrajectoryPoint) -> None:
+        self._latest_point = item
+
+    def pop(self, index=-1) -> WeightedTrajectoryPoint:
+        return self._latest_point
+
+    def clear_past(self) -> None:
+        # No sliding window to advance — the single stored point is always current.
+        pass
+
+    @property
+    def horizon(self) -> list:
+        assert self._latest_point is not None, (
+            "ConstantTrajectoryBuffer: no point received yet."
+        )
+        # Return the same object N+1 times.  The OCP reads but does not mutate
+        # trajectory points, so sharing the reference is safe and allocation-free.
+        return [self._latest_point] * self._n_horizon_states
+
+    def __len__(self) -> int:
+        if self._latest_point is None:
+            return 0
+        # Conceptually we can supply as many copies as needed, so return a value
+        # that always satisfies buffer_has_enough_data(ratio) for any ratio <= 3:
+        #   len * dt >= ratio * total_time  →  len >= ratio * horizon_indexes[-1]
+        return 3 * (self.horizon_indexes[-1] + 1)
+
+    def __getitem__(self, _):
+        return self._latest_point
+
+    def __setitem__(self, _, value):
+        self._latest_point = value
+
+
 def interpolate_weights(
     p1: TrajectoryPointWeights, p2: TrajectoryPointWeights, alpha: float
 ) -> TrajectoryPointWeights:
