@@ -181,3 +181,17 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   in "Rulings in force" for any task with `@rt` code; the first such
   brief (T4.2) checks the done-when (the implementer finds the rules and
   the macros from the skill alone).
+
+## T0.5 Platform matrix: table done, CI proposal pending
+- Table, minimums and CI proposal in environment.md, "Platform matrix
+  (T0.5)". Supervisor re-checked the ROS versions in rosdistro (pinocchio
+  4.1.0, crocoddyl 3.2.1 / 3.2.0 on Lyrical, coal 3.0.3 everywhere).
+- Rulings: `find_package(coal)` everywhere (all platforms ship coal 3.0.x);
+  minimums are the oldest platform version (crocoddyl 3.2.0, pinocchio
+  4.1.0, coal 3.0.3); mim_solvers, colmpc and force_feedback_mpc come from
+  source on Ubuntu (not released for any ROS distro); toml++ is missing on
+  Humble.
+- Open: user approval of the CI proposal; whether ROS's
+  `example_robot_descriptions` 7.0.0 installs the same CMake config and
+  `share/example-robot-data` layout as nix's 5.0.0 (the T3.1 test locates
+  the models through it): the first ROS CI run will tell.
