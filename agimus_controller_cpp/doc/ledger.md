@@ -120,3 +120,31 @@ design.md.
   `a2acb49`); see environment.md.
 - force-feedback-mpc (Python) is not in the shell yet: add it in P8 (it is
   built locally, not cached).
+
+## T0.4 Bug audit of the Python sources: done, rulings pending
+16 findings at `630372d` (A1–A16); the supervisor re-read A1, A4, A6 and A13
+in the code and confirms them. B1–B10 were re-checked and are accurate.
+Proposed handling (the user decides; accepted fixes become B-rows in
+design.md with a test):
+
+| Id | Where | Bug | Proposed |
+|---|---|---|---|
+| A1 | ROS:417-425, mpc.py:38 | `buffer_has_enough_data(1)` true at N points, `run` needs N+1: the controller stalls for good when the publisher stops | C++ uses integer counts (`has_horizon`); report upstream (ROS node not ported) |
+| A2 | ROS:131-163 | `q0` from `/joint_states` never passed: locked joints at neutral | report upstream; C++ `RobotModels` keeps `q0` (T3.1) |
+| A3 | mpc.py:32 | `current_time_ns` ignored | drop the parameter from `Mpc::run` (B11) |
+| A4 | ocp_croco_goal_reaching.py:206 | terminal cost uses the last running node's `ee_id` | fix in T4.3 (B12) |
+| A5 | force_feedback.py:185-214 | `force_lb/ub` ignored without constraints | fix in P8 (B13) |
+| A6 | ocp_croco_goal_reaching.py:18-20,82-84 | state weights sized `nq+nv`, not `ndx` | fix in T4.3 (B14); panda has nq == nv, so G5 is unaffected |
+| A7 | ws_shift_force_feedback.py:192-195 | dict used as a `Force` | fix in P8 (B15) |
+| A8 | force_feedback.py:40,149-150 | default tuple used as a numpy mask | fix in P8 (B16) |
+| A9 | ocp_croco_generic.py:700, force_feedback.py:104 | `constraints is None` never true: empty manager always attached | C++ attaches a manager only with constraints; check parity in T7.4 |
+| A10 | ocp_croco_generic.py:571-574 | `update` with no / exp activation: weights dropped or crash | setup error in T7.1 (B17) |
+| A11 | ocp_croco_generic.py:227,281,335,400 | `*Static` classes reuse the non-static `class_` (`as_dict`) | not ported; report upstream |
+| A12 | mpc.py:76-77, ocp_base_croco.py:187-189 | delay compensation integrates node 0's step but advances time by `dt` | `Mpc::integrate` advances time by `timesteps[0]`, the step it integrates (extends B1) |
+| A13 | warm_start_shift_previous_solution.py:93-104 | terminal state never shifted when its step > dt | fix in T4.4 (B18); G3 then differs at `xs[N]` only |
+| A14 | robot_model.py:50-62,346-351 | armature validated and ordered by joint name, used by DoF | fix in T3.1 follow-up (B19): map names to `idx_v` |
+| A15 | ocp_param_base.py:11-23 | docstring example backwards | docs only; report upstream |
+| A16 | ROS:554 | debug topic publishes the uncompensated x0 | not ported; report upstream |
+
+Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
+`clear_past`; covered by the C++ rolling check (B7).
