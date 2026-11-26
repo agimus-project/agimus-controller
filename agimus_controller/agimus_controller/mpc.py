@@ -124,7 +124,9 @@ class MPC(object):
             the same TrajectoryPoint object, where robot_configuration and robot_velocity have been modified.
         """
         x = self._ocp.integrate(state.robot_state, control)
-        state.time_ns += int(self._ocp.dt * 1e9)  # dt is in seconds
+        # One step of running model 0: its length is timesteps[0], which is dt
+        # only when the first dt factor is 1.
+        state.time_ns += int(round(self._ocp.problem.runningModels[0].dt * 1e9))
         state.robot_configuration = x[: len(state.robot_configuration)]
         state.robot_velocity = x[len(state.robot_configuration) :]
         return state
