@@ -8,6 +8,7 @@
   example-robot-data,
   pinocchio,
   python3,
+  tomlplusplus,
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -35,6 +36,7 @@ stdenv.mkDerivation (finalAttrs: {
   checkInputs = [
     doctest
     example-robot-data
+    tomlplusplus # test/golden fixtures
   ];
   nativeCheckInputs = [ python3 ]; # test/check_rt_coverage.py
 

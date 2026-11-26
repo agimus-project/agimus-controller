@@ -1,6 +1,7 @@
 find_package(doctest REQUIRED)
 include(${doctest_DIR}/doctest.cmake) # doctest_discover_tests
 find_package(example-robot-data REQUIRED)
+find_package(tomlplusplus REQUIRED) # Golden files (test/golden); tests only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # Allocation hook, RT guard and the single doctest main. An OBJECT library, so
@@ -44,6 +45,13 @@ get_filename_component(
 target_compile_definitions(
     test_robot_models
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
+)
+
+# Golden files written by test/golden/generate_golden.py.
+target_link_libraries(test_ocp_params PRIVATE tomlplusplus::tomlplusplus)
+target_compile_definitions(
+    test_ocp_params
+    PRIVATE AGIMUS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
 )
 
 add_test(
