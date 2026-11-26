@@ -186,7 +186,10 @@ struct RobotState {                  // measured state given to Mpc::run
   seconds, and `max_solve_time` is `std::optional<double>`, as in Python
   (solver side; see Conventions, Time).
   `void finalize()` computes `n_controls`, `timesteps` and `total_time`, and
-  throws if `horizon_size != n_controls`.
+  throws if `horizon_size != n_controls`. `total_time` is summed as
+  CPython >= 3.12's `sum()` does (Neumaier compensation), so it equals the
+  judge's value exactly; Python 3.10 (Humble) sums left to right and may
+  differ by an ulp.
 - `OcpResults`: `std::vector<Eigen::VectorXd> states, feed_forward_terms;
   std::vector<Eigen::MatrixXd> riccati_gains;`. Python's typo `ricatti` is
   fixed. `resize(n_controls, nx, ndx, nu)` sizes it at setup, and
@@ -649,9 +652,9 @@ numbers. The robot is example-robot-data's `panda`, with
 | Set | Python under test | Content |
 |---|---|---|
 | G1 | `OCPParamsBaseCroco` | timesteps, n_controls, total_time for `[1]/[19]`, `[1,2]/[20,10]`, `[1,2,4,8]/[5,5,5,4]` |
-| G2 | `WarmStartReference.generate` | x0, xs, us for a 5-point reference |
+| G2 | `WarmStartReference.generate` | x0, xs, us for a 5-point reference (ur5, as its Python test) |
 | G3 | `WarmStartShiftPreviousSolution.generate` | shifted xs, us with factors `[1,2]` |
-| G4 | `test_ocp_croco_base.py` | its `simple_ocp_croco_results.pkl` converted |
+| G4 | `test_ocp_croco_base.py` | its `simple_ocp_croco_results.pkl` converted, plus the problem; its running models use crocoddyl's default 1 ms step, not `dt` |
 | G5 | `OCPCrocoGoalReaching` | x0, reference, solution xs, us, K[0], kkt, iterations |
 | G6 | `OCPCrocoGeneric(ocp_goal_reaching.yaml)` | same content as G5 |
 | G7 | `OCPCrocoGeneric` with demo 08's collision OCP | solution plus collision residuals |

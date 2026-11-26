@@ -146,14 +146,15 @@ design.md with a test):
 | A15 | ocp_param_base.py:11-23 | docstring example backwards | docs only; report upstream |
 | A16 | ROS:554 | debug topic publishes the uncompensated x0 | not ported; report upstream |
 | A17 | robot_model.py:282-284 | `coal.Capsule(radius, halfLength)`: coal's second argument is the full length, so each capsule is half as long as the cylinder it replaces (collision avoidance on too-short links). Found in T3.1 | pass `2 * halfLength` (B20); ported as in Python until ruled |
+| A18 | ocp_base_croco.py:187-189, mpc.py:76-80 | `integrate` returns `runningDatas[0].xnext`, a view into crocoddyl's data; the state keeps slices of it, so the next solve overwrites the state with node 0's prediction. In ROS (`agimus_controller.py:529-532`, `constant_delay`) the `initial_state` sent with the next control and the feedback's x0 are wrong. Found in T4.1 | `return data.xnext.copy()` upstream; C++ `Mpc::integrate` writes into the `RobotState` (not affected). G10a's generator copies q, v after `integrate` |
 
 Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
 `clear_past`; covered by the C++ rolling check (B7).
 
 ## T2.6 Solver-side time back to `double`: done
 - `OcpParams::dt`, `timesteps`, `total_time` and `max_solve_time` are
-  `double` seconds; `total_time` is summed in order, as Python's `sum`, so
-  G1 can compare exactly. Green in configurations A and B (67/67).
+  `double` seconds. (The note that Python's `sum` adds in order was wrong;
+  corrected in T4.1.) Green in configurations A and B (67/67).
 - Deviation: `finalize()` also rejects a NaN `dt` and a `max_solve_time`
   that is not > 0 (setup errors; Python does not check).
 
@@ -195,3 +196,24 @@ Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
   `example_robot_descriptions` 7.0.0 installs the same CMake config and
   `share/example-robot-data` layout as nix's 5.0.0 (the T3.1 test locates
   the models through it): the first ROS CI run will tell.
+
+## T4.1 Golden files: done (9372dc0, 1042d71, b9f7287)
+- `CPP/test/golden/`: generator, README and fixtures G1–G5, G10a. The
+  supervisor reran the generator: byte-identical. 92/92 in A and B; pytest
+  58 passed, 8 skipped.
+- Rulings:
+  - `total_time` reproduces CPython >= 3.12's compensated float `sum`
+    (Neumaier), so G1 compares exactly (design.md, Parameters).
+  - Fixtures record Python as it is, pending A-rulings: A13 shows in G3
+    (`xs[3] == previous_xs[3]`); A4, A6, A12 have no effect on G5/G10a.
+  - G10a mirrors the ROS start-up (`setup_mpc_initial_guess`), advances the
+    state with `MPC.integrate` (Euler step of node 0, `timesteps[0]`), and
+    copies q, v after it (A18). B1/B2 were not needed (`time_ns` stays 0).
+  - toml++ is a test-only dependency (`test_ocp_params` links it).
+    `package.xml` uses `libtomlplusplus-dev`: rosdep has no key for toml++.
+  - `toml-sort-fix` (pre-commit) excludes `test/golden/`: it would reorder
+    the generated files.
+- Deviations: G2 uses ur5 (its Python test does); G3 uses fixed controls
+  instead of random ones; G4 also stores a recomputed solution (max
+  difference to the pickle 1.6e-11).
+- Open: A18 for the user.
