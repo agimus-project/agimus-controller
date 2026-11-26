@@ -19,7 +19,10 @@ Read in this order:
 4. [doc/rt_safety.md](rt_safety.md): the real-time rules and the
    allocation-checking test harness.
 5. [doc/crocoddyl_toml.md](crocoddyl_toml.md): the crocoddyl-toml library
-   and the TOML OCP files, including the acknowledgment of crocoddyl_yaml.
+   (generic, loco-3d), including the acknowledgment of crocoddyl_yaml.
+6. [doc/ocp_files.md](ocp_files.md): how agimus uses it: the types agimus
+   adds, the `[agimus]` table, building the horizon. Not given to `CT/`
+   tasks.
 
 Path shorthands used everywhere:
 
@@ -50,13 +53,16 @@ Treat these as fixed. Changing one needs the user.
   loco-3d/crocoddyl-toml), packaged like the Gepetto packages
   (jrl-cmakemodules, gepetto/nix flake) rather than with R6's plain CMake,
   which re-implements the ideas of crocoddyl_yaml (acknowledged in its design
-  doc). The format is designed for TOML, and it is validated by typed C++
-  structs, not by schema files. crocoddyl_yaml is not upgraded or used. A
+  doc). The format is designed for TOML. Each type is defined by a schema
+  file from which the typed C++ parsing code and an editor JSON Schema are
+  generated (revised on PR #334). crocoddyl_yaml is not upgraded or used. A
   translator from the Python YAML format will come later; it is not part of
   this plan. agimus reads two models of the file as templates ("running"
   and "terminal"), built once per node. The agimus-only keys (update,
   publish_residual, visual servoing, ...) live in an `[agimus]` table of the
-  same file. Details: [doc/crocoddyl_toml.md](crocoddyl_toml.md).
+  same file. Nothing agimus-specific goes into `CT/`. Details:
+  [doc/crocoddyl_toml.md](crocoddyl_toml.md) (library) and
+  [doc/ocp_files.md](ocp_files.md) (agimus side).
 - **R3 Third-party real-time violations stay red.** If crocoddyl, pinocchio,
   mim_solvers, colmpc, coal or force_feedback_mpc allocates inside the
   real-time path, the test fails and stays failing. The implementer stops and
@@ -102,6 +108,14 @@ Treat these as fixed. Changing one needs the user.
   (`-march`, AVX2/FMA, x86-64-v3) may come later, but only through T10.7:
   measure the gain, then get a deployment plan approved by the user. Until
   then, no task adds such flags.
+- **R9 Platforms (PR #334, 2026-11-26).** The code must build and pass its
+  tests on NixOS (gepetto/nix), Ubuntu 22.04 (ROS humble), 24.04 (ROS
+  jazzy) and 26.04. Dependencies follow what those platforms ship: the
+  oldest version among them is the minimum to support (C++17 with GCC 11,
+  CMake 3.22, Eigen 3.4). Day-to-day building and testing use nix (R6 is
+  unchanged: plain CMake; colcon also works). Bumping to newer dependencies
+  (Eigen 5, newer mim_solvers, colmpc, ...) is done after the port, as a
+  separate step.
 
 ## Phases
 
@@ -153,6 +167,16 @@ P5–P6 (crocoddyl-toml and the colmpc types) can run in parallel with P2–P4.
   and the accepted ones are rows of design.md's behaviour-change table.
   Can run in parallel with P1; must finish before the P2–P8 task that ports
   the affected code.
+- **T0.5 (M) Platform matrix (R9).** For NixOS (gepetto/nix) and Ubuntu
+  22.04, 24.04 and 26.04 (with their ROS distributions), record in
+  `doc/environment.md` the version of every dependency (Eigen, pinocchio,
+  crocoddyl, coal, mim_solvers, colmpc, force_feedback_mpc,
+  example-robot-data, doctest, toml++, CMake, GCC) and the oldest one, which
+  becomes the minimum in the CMake `find_package` calls. Propose a CI job per
+  platform (nix build, and a ROS-based job per Ubuntu release).
+  **Done when** the table is complete or marks what a platform lacks, and
+  the user has approved the CI proposal. Needed before P4 adds crocoddyl
+  and mim_solvers.
 
 ### P1 Package skeleton and real-time harness
 
@@ -205,6 +229,12 @@ Read [doc/design.md#data-types](design.md#data-types) first.
   `PYT/test_buffer.py`, plus `Rt*` tests for `push_back` (including when
   full), `horizon`, `clear_past`, in both modes, and the shared-library
   negative test of rt_safety.md (an allocation in `compute_horizon_indexes`).
+
+- **T2.6 (S) Solver-side time back to `double` (PR #334).** `OcpParams::dt`,
+  `timesteps`, `total_time` and `max_solve_time` become `double` seconds
+  again (design.md, Conventions, Time); time stamps and debug timers stay
+  `std::chrono::nanoseconds`. Update `PYT/test_ocp_param_base.py`'s port to
+  compare with `doctest::Approx` as Python does.
 
 **P2 done when** all of the above build, pass, and `check_rt_coverage` passes.
 
@@ -300,28 +330,35 @@ code).
   request; the supervisor asks the user. **Done when** an empty test runs
   through colcon in the container and through `nix build` / `nix develop` in
   the repository.
-- **T5.2 (M) Parsing.** `Document`, `load_file`, `load_string`, `ParseError`
-  with file:line:col and the key path, `format = 1`, application tables in
-  `Document::extra`, and the typed structs of every built-in type
-  (crocoddyl_toml.md, Built-in types). **Done when** each key of each type
-  has a test, plus tests for an unknown key, a wrong type, a missing
-  mandatory key, a wrong version and an unknown `type` (the message lists
-  the known ones).
+- **T5.2 (H) Schema files, generator and parsing.** The JSON Schema subset,
+  `cmake/crocoddyl_toml_generate.py`, `crocoddyl_toml_add_types`, the
+  schema file of every built-in type, `Document`, `load_file`,
+  `load_string`, `ParseError` with file:line:col and the key path,
+  `format = 1`, application tables in `Document::extra`, and the generated
+  editor schema `crocoddyl-toml.schema.json`
+  ([doc/crocoddyl_toml.md#schema-files-and-generated-code](crocoddyl_toml.md#schema-files-and-generated-code)).
+  **Done when** each key of each type has a test, plus tests for an unknown
+  key, a wrong type, a missing mandatory key, a wrong version and an
+  unknown `type` (the message lists the known ones); and taplo, using the
+  generated schema, accepts the test files and rejects one with an unknown
+  key.
 - **T5.3 (M) Builders.** `BuildContext`, `build_model`, `build_problem` for
   every built-in type. **Done when** each type has a test that builds it and
   compares it with the same model built directly with crocoddyl (same
   `calc`/`calcDiff` results on random x and u), two `build_model` calls share
   no object, and robot-dependent sizes and unknown frames raise `BuildError`.
-- **T5.4 (M) Registry.** `register_residual`, `register_activation`,
-  `register_dynamics`, `register_integrator`. **Done when** a test registers
-  a residual, loads a file that uses it, builds it, and checks that
-  registering a name twice throws.
+- **T5.4 (M) Downstream types.** A test project (in `tests/`) that adds a
+  residual with its own schema file and build function through
+  `crocoddyl_toml_add_types`. **Done when** it loads a file using that
+  residual, builds it, gets an extended editor schema that knows it, and
+  registering the same name twice throws.
 
 ### P6 colmpc types (in `CPP/`)
 
-Registered through T5.4's registry, behind `AGIMUS_CONTROLLER_WITH_COLMPC`,
-in `CPP/src/toml_types/`, tested with doctest. See
-[doc/crocoddyl_toml.md#types-registered-by-agimus_controller_cpp](crocoddyl_toml.md#types-registered-by-agimus_controller_cpp).
+Added through `crocoddyl_toml_add_types` (T5.4), behind
+`AGIMUS_CONTROLLER_WITH_COLMPC`: schema files in `CPP/schemas/toml/`, build
+functions in `CPP/src/toml_types/`, tested with doctest. See
+[doc/ocp_files.md#types-registered-by-agimus_controller_cpp](ocp_files.md#types-registered-by-agimus_controller_cpp).
 
 - **T6.1 (M)** Activations `colmpc_exp`, `colmpc_quad_exp`.
 - **T6.2 (H)** Residuals `colmpc_distance_collision`,
@@ -335,7 +372,7 @@ in `CPP/src/toml_types/`, tested with doctest. See
   `load_ocp_file(path)` registers the `CPP/` types, loads the file and parses
   `Document::extra["agimus"]` into an `OcpDefinition` (design.md, Builders),
   including `rolling_buffer` (implemented in T8.3), strictly
-  ([doc/crocoddyl_toml.md#the-agimus-table](crocoddyl_toml.md#the-agimus-table)).
+  ([doc/ocp_files.md#the-agimus-table](ocp_files.md#the-agimus-table)).
 - **T7.2 (H) Template builder.** `build_models_from_toml` in
   `ocp_builders.cpp`: one model per node from the running template with
   per-node dt, a terminal model with dt 0, armature, updaters matched by
@@ -345,7 +382,7 @@ in `CPP/src/toml_types/`, tested with doctest. See
   `CPP/test/resources/ocp/`:
   - `PY/ocp/ocp_goal_reaching.yaml`
   - the panda example in `agimus_controller_examples`
-  - demo 08's collision OCP (quoted in crocoddyl_toml.md)
+  - demo 08's collision OCP (quoted in ocp_files.md)
   - a visual-servoing OCP modelled on demo 04
 
   Write the mapping decisions to `CPP/test/resources/ocp/CONVERSION.md`; it
@@ -360,13 +397,14 @@ in `CPP/src/toml_types/`, tested with doctest. See
 
 ### P8 Force feedback
 
-- **T8.1 (H) Soft-contact types.** Register `soft_contact_1d`,
+- **T8.1 (H) Soft-contact types.** Add `soft_contact_1d`,
   `soft_contact_3d` (dynamics) and `soft_contact_euler` (integrator) from
-  `CPP/`, behind `AGIMUS_CONTROLLER_WITH_FORCE_FEEDBACK`
+  `CPP/` through `crocoddyl_toml_add_types` (schema files and build
+  functions), behind `AGIMUS_CONTROLLER_WITH_FORCE_FEEDBACK`
   (force_feedback_mpc `DAMSoftContact{1D,3D}AugmentedFwdDynamics`,
   `IAMSoftContactAugmented`).
 - **T8.2 (H) agimus side.** Build the `IAMSoftContactAugmented` per node (the
-  model's `soft_contact_euler` integrator, crocoddyl_toml.md), add the soft-contact updater
+  model's `soft_contact_euler` integrator, ocp_files.md), add the soft-contact updater
   (f_des, f_weight, active_contact, tau_grav_weight) and the update of the
   IAM bounds, and handle the state size nx + nc. Source
   `PY/ocp/ocp_croco_generic_force_feedback.py`.
@@ -414,7 +452,9 @@ Golden and RT tests stay green throughout.
 - **T10.2 (M) agimus overhead.** Bring `Mpc::run` minus the solver's
   `solve` to ≤ 2 % of the tick on every OCP (measured against the T4.7
   bare-crocoddyl baseline). Typical work: remove copies, skip debug-data
-  work that is disabled, and cache what the updaters recompute.
+  work that is disabled, and cache what the updaters recompute. Also
+  benchmark the rolling buffer against updating every node (design.md,
+  B7).
 - **T10.3 (M) Build settings.** Measure `-O2` against `-O3`, and LTO on our
   library only, on generic x86-64. Keep a flag only if it pays (R8) and every
   translation unit still compiles under 2 GB.
@@ -425,6 +465,8 @@ Golden and RT tests stay green throughout.
   Performance rule 6): allocate each node's datas from the thread that
   computes it, or pad them to separate cache lines, and keep the change only
   if it meets R8. Measure first; do not restructure before the numbers.
+  Follow the OpenMP step of design.md's Benchmark section (affinity,
+  binding, wait policy).
 - **T10.5 (H) Hot spots in dependencies.** For each third-party hot spot
   from T10.1 (e.g. collision distance, frame kinematics, the QP), give the
   user the numbers and a proposed patch. Implement only the approved ones,
@@ -463,6 +505,12 @@ Golden and RT tests stay green throughout.
      - rollback to the generic build.
   3. **Done when** the numbers are in the ledger and, if the gain meets
      R8, the user has approved or rejected `doc/isa_deployment.md`.
+
+- **T10.8 (H) Compilers and OpenMP runtimes (optional, after the port).**
+  Build the whole stack with GCC, Clang and Intel oneAPI in a dedicated
+  environment at full optimisation, and compare `bench_mpc` (design.md,
+  Benchmark). **Done when** the numbers are in the ledger; nothing ships
+  from it without the user.
 
 ## Facts the plan relies on
 

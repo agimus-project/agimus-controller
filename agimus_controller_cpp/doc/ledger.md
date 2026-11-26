@@ -86,3 +86,31 @@ design.md.
   `Mpc::reset`, `Ocp::reset`, `WarmStart::reset` or `TrajectoryBuffer::clear`.
 - B4: the user is not sure; the plan keeps parity (no residual with a
   reference). Revisit if a demo needs torque tracking around gravity.
+
+## Review of PR #334 by Kotochleb, 2026-11-25/26 (with the user's replies)
+- Time: solver-side values (`OcpParams` dt, timesteps, total_time,
+  max_solve_time; crocoddyl; crocoddyl-toml's `build_model`) are `double`
+  seconds; agimus' external time stamps and measured durations stay
+  `std::chrono`. Code follow-up: T2.6.
+- crocoddyl-toml: one schema file (JSON Schema subset) per type; typed C++
+  parsing and registration generated at build time, ROS-message style; a
+  generated editor schema for TOML language servers. Downstream types use
+  the same CMake function (endorsed by the user). T5.2 is now H.
+- crocoddyl_toml.md split: generic library only; the agimus side moved to
+  the new ocp_files.md, which `CT/` briefs do not include.
+- Debug data and phase timers are opt-in (`use_debug_data`), as in Python.
+- Benchmarking: `steady_clock`; `nice -n -20` (or `chrt -f`); an OpenMP
+  affinity/binding step; optional GCC/Clang/oneAPI comparison later
+  (T10.8); rolling against full update (T10.2).
+- Rolling buffer: the reviewer asks that it be allowed only when every node
+  has the same dt; the plan already requires every dt factor to be 1.
+- Environment: build and test with nix; colcon still works. New ruling R9
+  (user): NixOS and Ubuntu 22.04/24.04/26.04; dependencies follow those
+  platforms (task T0.5); bump to Eigen 5 and newer libraries after the
+  port.
+- rt_safety: configuration B is `RelWithDebInfo` (accepted suggestion) with
+  `-O3 -g` set explicitly (CMake's default is `-O2`); it uses more compile
+  RAM, so the 2 GB rule is checked there. Configuration C (Release,
+  `-march=native`, whole stack) is the last stage and needs its own
+  environment. Code follow-up on `cpp-port/basics`: `package.nix` builds
+  configuration B.

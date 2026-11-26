@@ -2,6 +2,14 @@
 
 Recorded on 2026-11-25. Update this file when a dependency changes.
 
+**Build and test with nix** (PR #334): the repository flake gets a C++ shell
+(`nix develop .#cpp`, plain CMake) and a Python judge shell
+(`nix develop .#py-judge`) with the code (branch `cpp-port/basics`). They
+provide every dependency, including the ones the container below lacks
+(doctest, colmpc, force_feedback_mpc). colcon still works, since the package
+is plain CMake. The supported platforms are in PLAN.md, R9; T0.5 records
+their dependency versions.
+
 ## C++ build environment: workspace_cadmium dev container
 
 The container mounts the workspace at `/workspaces/workspace_cadmium`. ROS

@@ -45,12 +45,17 @@ Shorthands (`PY/`, `PYT/`, `ROS/`, `CPP/`, `CT/`) are defined in
 - Python `None` ("not provided") has no C++ equivalent. Every vector exists
   and is sized at setup. An absent end effector is one that is not in
   `ee_inputs`. An optional setting (`max_solve_time`) is `std::optional`.
-- **Time is `std::chrono`.** Every time point, duration, dt and timeout is a
-  `std::chrono::nanoseconds` (integer, exact). Convert to `double` seconds
-  only at a boundary that requires it, with
-  `std::chrono::duration<double>(d).count()`. The boundaries are a
-  crocoddyl model's `dt`, CSQP's `max_solve_time` and a ROS message
-  field. Sums of timesteps stay in nanoseconds, so they are exact.
+- **Time: `std::chrono` outside, `double` in the solver (PR #334).**
+  - agimus' external API uses `std::chrono::nanoseconds`: time stamps of
+    trajectory points and of the measured state, the time given to and
+    returned by `Mpc`, and every measured duration (debug timers,
+    benchmark).
+  - The solver side uses `double` seconds, as crocoddyl, CSQP and the
+    Python package do: `OcpParams::dt`, `timesteps`, `total_time` and
+    `max_solve_time`, crocoddyl models' `dt`, and crocoddyl-toml.
+  - Convert only where the two meet, with
+    `std::chrono::round<std::chrono::nanoseconds>(std::chrono::duration<double>(seconds))`
+    one way and `std::chrono::duration<double>(d).count()` the other.
   - Clock: `std::chrono::steady_clock`, which is monotonic and has
     nanosecond resolution on Linux (`CLOCK_MONOTONIC`). Do not use
     `high_resolution_clock`: libstdc++ aliases it to `system_clock`, which
@@ -177,10 +182,9 @@ struct RobotState {                  // measured state given to Mpc::run
 
 - `OcpParams` holds the fields of `OCPParamsBaseCroco` (`PY/ocp_param_base.py:25-85`)
   with the same defaults, plus `use_filter_line_search` as a normal field
-  (behaviour change B8). `dt`, `timesteps` and `total_time` are
-  `std::chrono::nanoseconds`, and `max_solve_time` is
-  `std::optional<std::chrono::nanoseconds>`. A parameter file gives
-  seconds; the loader converts with `std::chrono::round`.
+  (behaviour change B8). `dt`, `timesteps` and `total_time` are `double`
+  seconds, and `max_solve_time` is `std::optional<double>`, as in Python
+  (solver side; see Conventions, Time).
   `void finalize()` computes `n_controls`, `timesteps` and `total_time`, and
   throws if `horizon_size != n_controls`.
 - `OcpResults`: `std::vector<Eigen::VectorXd> states, feed_forward_terms;
@@ -379,7 +383,7 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   (`set_reference_weighted_trajectory`, lines 125-212), expressed as
   `NodeUpdater`s.
 - OCP files (P7, `ocp_definition.hpp`; the `[agimus]` keys are in
-  crocoddyl_toml.md):
+  ocp_files.md):
 
   ```cpp
   struct VisualServoingSpec { std::string cost, world_frame, object_frame; };
@@ -399,7 +403,7 @@ Rules (Python source: `PY/ocp/ocp_croco_generic.py`, the `update` methods):
   OcpFile load_ocp_file(const std::filesystem::path&);
   ```
 - `OcpModels build_models_from_toml(const OcpFile&, const RobotModels&, const OcpParams&)`
-  (P7) is described in crocoddyl_toml.md.
+  (P7) is described in ocp_files.md.
 - Both apply `robot_models.armature()` to every differential model, and set
   the per-node dt from `OcpParams::timesteps` and dt 0 on the terminal model.
 
@@ -442,11 +446,14 @@ class WarmStart {
   - solve;
   - update the previous solution;
   - `clear_past`;
-  - fill the debug data and timers.
+  - if `use_debug_data` (opt-in, as in Python): fill the debug data and
+    the phase timers. With it off, no debug work and no clock read is done
+    in the tick.
 
   Results are read with `ocp().results()`.
 - `/// @rt Status integrate(RobotState& state, const Eigen::VectorXd& u)`
-  advances q, v and `time` by one dt (B1).
+  advances q, v and `time` by one dt (B1); `time` is converted from the
+  `double` step at this boundary.
 - `/// @rt Status push_back(const WeightedTrajectoryPoint&)` forwards to the
   buffer.
 - `debug_data()`, `ocp()`, `buffer()`.
@@ -532,13 +539,27 @@ fails on time.
     agimus overhead (T10.2 target ≤ 2 %).
   - The Python `MPC.run` on the same problem, from a script next to the
     golden generator.
-- **Timing.** `std::chrono::steady_clock`, stored as
-  `std::chrono::nanoseconds`; converted to microseconds or milliseconds only
-  when the table is printed.
+- **Timing.** `std::chrono::steady_clock`, the standard clock for measuring
+  intervals (monotonic; `CLOCK_MONOTONIC` on Linux, nanosecond resolution),
+  stored as `std::chrono::nanoseconds`; converted to microseconds or
+  milliseconds only when the table is printed.
 - **Conditions.** Set `n_threads` explicitly and export
   `OMP_THREAD_LIMIT`; some builds default to one OpenMP thread per core. Run
-  on a machine that is otherwise idle. `taskset` to one core is optional but
-  recorded.
+  on a machine that is otherwise idle, at the highest priority:
+  `nice -n -20` (needs root or `CAP_SYS_NICE`; also try `chrt -f 99`,
+  real-time FIFO scheduling). `taskset` to one
+  core is optional. Record all of these with the numbers.
+- **OpenMP step** (`n_threads > 1`, T10.4). Before measuring, check and
+  record the process affinity (`taskset -p`) and the OpenMP placement:
+  `OMP_DISPLAY_ENV=true` and `OMP_DISPLAY_AFFINITY=true` print it. Then
+  compare settings for the best tick: `OMP_PROC_BIND` (`close`, `spread`),
+  `OMP_PLACES` (`cores`, `threads`), `OMP_WAIT_POLICY=active`, and the
+  runtime's spin settings (`GOMP_SPINCOUNT` for GCC's libgomp).
+- **Optional, after the port (T10.8):** build the whole stack with GCC and
+  with Clang (they ship different OpenMP runtimes, libgomp and libomp) and
+  with Intel oneAPI, and compare. It needs a new environment with the whole
+  stack rebuilt at full optimisation, so it waits until the code can be
+  profiled.
 - **Machine.** Numbers that decide anything (R8, T10.x) come from a desktop
   or server CPU, never a laptop. Laptops throttle with temperature, and
   their hybrid performance/efficiency cores make thread timings depend on
@@ -553,7 +574,7 @@ Every deliberate difference. A test covers each one, and the README lists them.
 
 | Id | Python | C++ |
 |---|---|---|
-| B1 | `PY/mpc.py:77`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt` (both are `std::chrono::nanoseconds`) |
+| B1 | `PY/mpc.py:77`: `time_ns += int(dt * 1e-9)` always adds 0 | adds `dt`, converted from seconds to `std::chrono::nanoseconds` |
 | B2 | `PY/mpc.py:38` checks `len < n_controls + 1`, but `horizon` needs `len > horizon_indexes[-1]` (larger when a factor > 1), so it asserts | checks `has_horizon()` and returns `kNotEnoughData` |
 | B3 | `PY/trajectory.py:308-311` raises `KeyError` when a frame is in only one point | a missing side counts as zero weights |
 | B4 | `ResidualModelControlGrav.update` sets a `reference` attribute that crocoddyl's class does not have (no effect) | only the weights are updated; see the note below the table |
@@ -608,6 +629,8 @@ C++:
   node 0's own data, so nothing is created (fixes 3). `RtOcp.set_reference...`
   covers a rotation followed by a solve, so the `resizeData()` that the
   solver then runs is proven allocation-free (same sizes), or goes red (R3).
+- Benchmark (T10.2): rolling against updating every node, on the same
+  problem; keep rolling only if it is measurably faster (R8).
 - Test: over 50 ticks with a skipped tick and a trajectory jump, the
   references of every node equal those of an OCP without the rolling
   buffer.

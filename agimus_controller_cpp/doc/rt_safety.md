@@ -130,8 +130,20 @@ is not done until both are green.
 | Config | Flags | Catches |
 |---|---|---|
 | A, debug | `CMAKE_BUILD_TYPE=Debug`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | logic errors with full assertions and readable backtraces; run first |
-| B, optimised | `CMAKE_BUILD_TYPE=RelWithDebInfo` (`-O3`), `AGIMUS_CONTROLLER_RT_CHECKS=ON` | bugs that only appear under optimisation: undefined behaviour, aliasing, uninitialised reads; also checks that the RT tests hold when the optimiser elides or merges allocations |
+| B, optimised | `CMAKE_BUILD_TYPE=RelWithDebInfo` with `CMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | bugs that only appear under optimisation: undefined behaviour, aliasing, uninitialised reads; also checks that the RT tests hold when the optimiser elides or merges allocations |
 | C, native | B plus `CMAKE_BUILD_TYPE=Release` and `-march=native`, for **the whole stack** | vectorisation and alignment bugs with AVX |
+
+Notes on B and C (PR #334):
+
+- CMake's own `RelWithDebInfo` flags are `-O2 -g -DNDEBUG`, so B sets
+  `CMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"` explicitly (`-DNDEBUG` is
+  dropped anyway by the RT checks' `-UNDEBUG`). Debug information makes the
+  compiler use more RAM than a plain `Release` build: the 2 GB per
+  translation unit limit (R6) is checked in configuration B.
+- **C is the very last stage**, run only after A and B are green for the
+  whole phase, and it needs its own environment (a new nix shell or docker
+  image) in which the whole stack is rebuilt with the same flags (see
+  below).
 
 Configuration C needs care, because of what happened with moto's aligned
 maps. With AVX, Eigen aligns fixed-size objects such as `Matrix4d` and 6×6

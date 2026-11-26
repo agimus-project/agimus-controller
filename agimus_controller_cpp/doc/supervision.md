@@ -129,9 +129,11 @@ Each item is a yes/no question. A "no" is a finding.
   (crocoddyl_toml.md), no new dependency outside the brief, warnings
   clean, pre-commit clean, green in configurations A and B, no `-march`
   outside configuration C and T10.7.
-- **Time.** Durations and time points are `std::chrono::nanoseconds`, read
-  from `steady_clock`, and converted to `double` only at a crocoddyl, CSQP
-  or ROS boundary (design.md, Conventions).
+- **Time.** agimus' external time stamps and measured durations are
+  `std::chrono::nanoseconds` (read from `steady_clock`); solver-side values
+  (`dt`, timesteps, timeouts, crocoddyl and crocoddyl-toml) are `double`
+  seconds; conversions happen only where the two meet (design.md,
+  Conventions).
 - **Git.** Atomic commits, short messages, no AI attribution lines, nothing
   pushed.
 

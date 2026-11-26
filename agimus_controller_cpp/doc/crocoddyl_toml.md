@@ -1,12 +1,23 @@
 # crocoddyl-toml: OCP descriptions in TOML
 
-Ruling R2 (2026-11-25): OCPs are described in TOML and loaded by
-**crocoddyl-toml**, a new library in its own repository (`CT/`).
+Ruling R2 (2026-11-25, revised on PR #334 2026-11-26): OCPs are described
+in TOML and loaded by **crocoddyl-toml**, a new library in its own
+repository (`CT/`).
 
 - The file format is designed for TOML. It is not a copy of crocoddyl_yaml's
   schema.
-- Files are validated by typed C++ structs, not by schema files.
+- **Every type is defined once, in a schema file.** The typed C++ structs,
+  their parsers and their registration are generated from the schema files
+  at build time, the way ROS generates code from message definitions. A
+  JSON Schema of the whole format is generated too, so editors (TOML
+  language servers) and LLMs can check a file. A downstream library adds a
+  type with a schema file and one `build` function; it writes no parsing or
+  registration code.
 - crocoddyl_yaml is not upgraded, extended or used.
+- **Nothing application-specific goes into `CT/`.** crocoddyl-toml is a
+  loco-3d library. The first user, agimus, documents its own use in
+  [ocp_files.md](ocp_files.md); briefs for `CT/` tasks do not include that
+  file, and no agimus name, key, type or example appears in `CT/`.
 
 ## Acknowledgment: crocoddyl_yaml
 
@@ -28,9 +39,10 @@ crocoddyl-toml keeps that architecture and its idea of reusable stages. It
 re-implements the rest:
 
 - TOML instead of YAML;
-- typed structs instead of yaml-schema-cpp;
+- schema files compiled into typed C++ code, instead of yaml-schema-cpp's
+  run-time validation;
 - the crocoddyl 3 and pinocchio 4 APIs;
-- a registry for types defined outside the library.
+- types added by other libraries through the same schema files.
 
 crocoddyl_yaml's type list is the starting point for the built-in types
 below.
@@ -43,7 +55,7 @@ requirement here, with a test:
 | The contact case falls through to `default: throw` (missing `break`, `src/factories/diff_action.cpp:92-96`) | Every built-in type has a test that builds it |
 | Every node of a stage, and the terminal node, share one action-model object (`src/factories/problem.cpp:58-83`) | Every `build_*` call returns new objects; nothing is shared between nodes |
 | `integrator` is parsed and then discarded (`src/trajectory.cpp:83-89`) | Every key is either used or rejected; a test per key |
-| The node count `int(duration / dt)` truncates (`0.19 / 0.01` gives 18) | Times are integer `std::chrono::nanoseconds`; node counts are given, not computed |
+| The node count `int(duration / dt)` truncates (`0.19 / 0.01` gives 18) | Node counts are given, never computed from a duration |
 | Error messages copied between factories ("Residual ContactFrictionCone" in contacts) | Error messages are generated from the key path, never written by hand |
 | Dead, uncompilable files; `ProblemFactory` without a test | `-Werror` in CI; every public function has a test |
 
@@ -90,11 +102,13 @@ parsers disagree with each other, and Python's standard library reads TOML
     and the `BUILD_PYTHON_INTERFACE` option (default OFF until bindings
     exist), because crocoddyl's users are mostly in Python and the
     maintainers will likely ask for them.
-- Dependencies: crocoddyl, pinocchio, Eigen and toml++ 3.4. toml++ is
-  packaged as `libtomlplusplus-dev` in Ubuntu and as `tomlplusplus` in
-  nixpkgs.
-  - It has no dependency on colmpc, force_feedback_mpc or agimus. Those
-    register their types from outside (see Registry).
+- Dependencies: crocoddyl, pinocchio, Eigen and toml++ 3.x; Python 3 (standard
+  library only) at build time, for the code generator. toml++ is packaged as
+  `libtomlplusplus-dev` in Ubuntu and as `tomlplusplus` in nixpkgs. The
+  versions available on every supported platform (PLAN.md, R9) are the
+  minimum to support.
+  - It has no dependency on colmpc, force_feedback_mpc or any application.
+    Those add their types from outside (see Schema files).
   - toml++ is header-only and heavy to compile. Compile it once, in
     `src/toml_impl.cpp` with `TOML_HEADER_ONLY=0`, so every translation unit
     stays under 2 GB.
@@ -117,8 +131,8 @@ Principles:
   inline tables cannot span lines): `residual = { type = "state" }`. Longer
   ones use a sub-table, `[models.running.costs.x.residual]`.
 - **Every object with variants has a `type` key**, written in `snake_case`.
-- **Times are seconds** (`dt = 0.01`). The loader converts them to
-  `std::chrono::nanoseconds` with `std::chrono::round`.
+- **Times are seconds**, read as `double` (`dt = 0.01`), as crocoddyl and the
+  solvers use them.
 - **Infinite bounds use TOML's native `inf` and `-inf`.**
 - **A vector can be given as a scalar**, which is broadcast to the size the
   model needs, as in Python (`weights = 1.0`).
@@ -130,10 +144,12 @@ Principles:
   `goal.toml:14:1: models.running.costs.goal_tracking.activation.weights:
   expected 6 values (nr of frame_placement), got 3`.
 - **Versioned.** The first key is `format = 1`, and the loader rejects other
-  versions. The translator from the Python agimus format (later, separate)
-  writes this format.
+  versions.
+- **Checkable in an editor.** A file may start with
+  `#:schema <path or URL of crocoddyl-toml.schema.json>`, which TOML language
+  servers (taplo, Even Better TOML) use to validate it as it is typed.
 
-Example: the goal-reaching OCP with its agimus section.
+Example: a goal-reaching OCP for example-robot-data's panda.
 
 ```toml
 format = 1
@@ -155,8 +171,7 @@ activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.running.costs.goal_tracking]
 weight = 1.0
-# Python `id: 0`: the frame follows the trajectory ([agimus] below).
-residual = { type = "frame_placement", frame = "universe" }
+residual = { type = "frame_placement", frame = "panda_hand" }
 activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.terminal]
@@ -171,25 +186,12 @@ activation = { type = "weighted_quad", weights = 1.0 }
 
 [models.terminal.costs.goal_tracking]
 weight = 1.0
-residual = { type = "frame_placement", frame = "universe" }
+residual = { type = "frame_placement", frame = "panda_hand" }
 activation = { type = "weighted_quad", weights = 1.0 }
-
-# Read by agimus_controller_cpp, ignored by crocoddyl-toml (see below).
-[agimus]
-running_model = "running"
-terminal_model = "terminal"
-
-[agimus.running]
-update = ["control_reg", "state_reg"]
-update_frame_from_trajectory = ["goal_tracking"]
-
-[agimus.terminal]
-update = ["state_reg"]
-update_frame_from_trajectory = ["goal_tracking"]
 ```
 
-An optional `[problem]` table describes a whole horizon for users that do
-not build it themselves (agimus builds its own, from `OcpParams`):
+An optional `[problem]` table describes a whole horizon, for users that do
+not build it themselves:
 
 ```toml
 [problem]
@@ -204,8 +206,8 @@ terminal = "terminal"
 
 crocoddyl-toml parses only `format`, `models` and `problem`. It returns every
 other top-level table untouched in `Document::extra`, so an application keeps
-its own keys in the same file. agimus uses `[agimus]`. This replaces the
-earlier "small agimus YAML file": one OCP is one file.
+its own keys in the same file (for instance `[my_controller]`). One OCP is
+one file.
 
 ## C++ API
 
@@ -230,47 +232,82 @@ struct BuildContext {
   std::shared_ptr<pinocchio::GeometryModel> geometry;            // nullptr if unused
 };
 
-// New objects on every call (one per node). Throws BuildError (key path) on
-// an unknown frame or a size mismatch.
+// New objects on every call (one per node). `dt` in seconds. Throws
+// BuildError (key path) on an unknown frame or a size mismatch.
 std::shared_ptr<crocoddyl::ActionModelAbstract> build_model(
-    const Document&, std::string_view model, const BuildContext&,
-    std::chrono::nanoseconds dt);
+    const Document&, std::string_view model, const BuildContext&, double dt);
 std::shared_ptr<crocoddyl::ShootingProblem> build_problem(
     const Document&, const BuildContext&, const Eigen::VectorXd& x0);
 
 }  // namespace crocoddyl_toml
 ```
 
-- `ModelSpec`, `CostSpec`, `ConstraintSpec` and one struct per built-in type
+- `ModelSpec`, `CostSpec`, `ConstraintSpec` and one struct per type
   (`StateResidualSpec { std::optional<Eigen::VectorXd> xref; }`, ...) hold
-  the parsed values. Each has a `parse(const toml::table&, KeyPath)`
-  function. Defaults live in the struct definition.
+  the parsed values. They and their `parse` functions are generated from the
+  schema files (next section); defaults come from the schema.
 - Sizes that depend on the robot (nv, nr) are checked in `build_model`,
   where they are known. Everything else is checked in `load_*`.
+- `load_*` validates the keys of every type registered so far, including
+  types added by other libraries: register them before loading.
 
-### Registry
+## Schema files and generated code
 
-For types defined outside crocoddyl-toml (colmpc, force_feedback_mpc):
+Endorsed on PR #334 (reviewer Kotochleb, the user): one schema file per type
+is the single source of truth, and code is generated from it, as ROS does
+with message definitions.
 
-```cpp
-struct ResidualType {
-  std::function<void(const toml::table&, const KeyPath&)> validate;   // at load
-  std::function<ResidualModelAbstractPtr(const toml::table&, const BuildContext&)> build;
-};
-void register_residual(std::string type, ResidualType);
-void register_activation(std::string type, ActivationType);
-void register_dynamics(std::string type, DynamicsType);
-void register_integrator(std::string type, IntegratorType);
-```
+- **Format: JSON Schema** (a restricted subset), one file per type:
+  `schemas/<family>/<type>.schema.json`, for instance
+  `schemas/residual/frame_placement.schema.json`. JSON Schema is what TOML
+  language servers read, and what LLMs know best.
+  - Allowed keywords: `type` (`object`, `number`, `integer`, `boolean`,
+    `string`, `array`), `properties`, `required`, `default`, `enum`,
+    `items`, `minItems`, `maxItems`, `description`,
+    `additionalProperties: false` (always).
+  - Extensions, prefixed `x-`: `x-size` for a vector whose size depends on
+    the model (`"nv"`, `"ndx"`, `"nu"`, `"nr"`), checked at build time;
+    `x-scalar-broadcast: true` when a scalar may stand for the vector;
+    `x-cpp-type` when the default mapping is not enough (`"pinocchio::SE3"`
+    for a pose).
+- **Generator:** `cmake/crocoddyl_toml_generate.py` (Python 3, standard
+  library only), run at build time through the CMake function
+  `crocoddyl_toml_add_types(<target> FAMILY <family> SCHEMAS <files...>)`.
+  For each schema it generates:
+  - the C++ struct, with the schema's defaults;
+  - its `parse(const toml::table&, const KeyPath&)`, with the strict rules of
+    the File format section (unknown key, wrong type or size: `ParseError`
+    naming file:line:col and the key path);
+  - its registration, which ties the type name to the struct and to a
+    hand-written build function
+    `std::shared_ptr<...> build(const <Struct>&, const BuildContext&)`;
+  - a `register_<target>_types()` function for the target, idempotent
+    (`std::call_once`).
 
-- Registration is setup-only and not thread-safe: register before loading
-  files. Registering a name twice, or a built-in name, throws.
-- An unknown `type` is a `ParseError` that lists the known types for that
-  family.
+  The generated files go to the build tree and are never edited or
+  committed.
+- **Downstream types** use the same CMake function from their own project,
+  with their own schema files and build functions. That is the only way to
+  add a type; there is no hand-written parsing or registration API.
+- **Editor schema:** the build also writes `crocoddyl-toml.schema.json`, the
+  JSON Schema of a whole file (format, models, problem, every built-in
+  type), installed under `share/crocoddyl-toml/`. A downstream project's
+  `crocoddyl_toml_add_types` call writes its own extended copy that also
+  knows its types.
+- **Registry underneath:** the generated code fills a run-time registry
+  (type name to parse and build functions). Registering a name twice, or a
+  built-in name, throws. An unknown `type` is a `ParseError` that lists the
+  known types for that family.
+- **Unit tests** (T5.3): each type has a test that loads a TOML file,
+  builds the model and compares it with the same model built by hand in
+  C++ (same `calc`/`calcDiff` results on random x and u). T5.2 also checks
+  with taplo that the generated JSON Schema accepts the test files and
+  rejects a file with an unknown key.
 
 ## Built-in types
 
-These are the types agimus needs, all plain crocoddyl. The rest of
+Each is a schema file plus a build function. The first set is what the first
+user needs, all plain crocoddyl. The rest of
 crocoddyl_yaml's list (rigid contacts 1D–6D, friction cone, frame axis
 alignment, frame collision, smooth norms, flat exp/log activations, RK
 integrators) is added when someone needs it, each with its test.
@@ -295,128 +332,3 @@ integrators) is added when someone needs it, each with its test.
 
 Cost item keys: `weight` (1.0), `active` (true), `residual`, `activation`.
 Constraint item keys: `active` (true), plus the constraint's keys.
-
-## Types registered by agimus_controller_cpp
-
-They live in `CPP/src/toml_types/` and are registered by
-`agimus_controller::register_toml_types()`. Registration must happen before
-a file is loaded, because loading validates the registered types' keys. So
-agimus loads OCP files only through `agimus_controller::load_ocp_file(path)`
-(setup), which:
-
-1. calls `register_toml_types()`, which is idempotent (`std::call_once`), so
-   loading several files never registers a name twice;
-2. calls `crocoddyl_toml::load_file`;
-3. parses `[agimus]` into an `OcpDefinition`;
-4. returns both as an `OcpFile` (design.md, Builders), the input of
-   `build_models_from_toml`.
-
-| `type` | Family | Builds | Keys | CMake option |
-|---|---|---|---|---|
-| `colmpc_exp`, `colmpc_quad_exp` | activation | `colmpc::ActivationModelExp` / `QuadExp(nr, alpha)` | `alpha` (1.0) | `AGIMUS_CONTROLLER_WITH_COLMPC` |
-| `colmpc_distance_collision` | residual | `colmpc::ResidualDistanceCollision(state, nu, geometry, pair_id)` | `geometry_1`, `geometry_2` (names) | same |
-| `colmpc_distance_collision2` | residual | `colmpc::ResidualDistanceCollision2(state, nu, pair_id)` | `geometry_1`, `geometry_2` | same |
-| `colmpc_free_fwd` | dynamics | colmpc's free-forward-dynamics DAM | none | same |
-| `soft_contact_1d`, `soft_contact_3d` | dynamics | force_feedback_mpc `DAMSoftContact{1D,3D}AugmentedFwdDynamics` | `frame`, `kp`, `kv`, `oPc`, `ref`, `cost_ref`, `with_gravity_torque_reg` (false), `axis` (1D) or `enabled_directions` (3D) | `AGIMUS_CONTROLLER_WITH_FORCE_FEEDBACK` |
-| `soft_contact_euler` | integrator | `IAMSoftContactAugmented` | `force_lb`, `force_ub` | same |
-
-Collision rules (port of `PY/ocp/ocp_croco_generic.py:498-550`):
-
-- the residual adds the geometry pair to the geometry model if it is
-  missing, then uses its index;
-- There is one geometry model per OCP: `BuildContext::geometry`, which
-  becomes `OcpModels::geometry`. When colmpc's state is used, agimus creates
-  it from that same pointer, so the pairs a residual adds and the placements
-  `Ocp::set_geometry_placement` updates are in one object. If colmpc's state
-  copies the geometry model instead of sharing it, stop (condition 4).
-- `colmpc_distance_collision2` needs colmpc's `StateMultibody` and the
-  `colmpc_free_fwd` dynamics. The file says so explicitly with
-  `dynamics = { type = "colmpc_free_fwd" }`; nothing is chosen silently, as
-  Python did (`PY/.../ocp_croco_generic.py:675-711`). agimus creates
-  colmpc's state when a model it builds uses `colmpc_free_fwd`, and building
-  `colmpc_distance_collision2` under other dynamics is a `BuildError`.
-
-## The `[agimus]` table
-
-Parsed by `CPP/` (`ocp_definition.hpp/.cpp`) into an `OcpDefinition`, with
-the same strict rules: typed structs, unknown keys rejected, key paths in
-errors.
-
-| Key | Meaning (Python equivalent) |
-|---|---|
-| `running_model`, `terminal_model` | names in `[models]` used as the templates of every running node and of the terminal node |
-| `<node>.update` | costs whose reference and weights follow the trajectory (`update: true`); the rule comes from the residual type |
-| `<node>.update_frame_from_trajectory` | frame residuals whose frame follows the trajectory point's single end effector (non-Static residuals, `id: 0`) |
-| `<node>.collision_weight_from_trajectory` | costs whose weight is `w_collision_avoidance` |
-| `<node>.publish_residuals` | `publish_residual: true`; `running` only, because Python only publishes running residuals |
-| `<node>.visual_servoing` | array of `{ cost, world_frame, object_frame }` (`ResidualModelVisualServoing`) |
-| `rolling_buffer` | Python `expect_rolling_buffer` (default false); see design.md, B7 |
-
-`<node>` is `running` or `terminal`. Python's `active: false` is the
-crocoddyl-toml `active = false` key on the cost or constraint itself.
-
-Rules:
-
-- A name that is listed but missing from its model is a setup error.
-- `update_frame_from_trajectory` and `visual_servoing` imply `update`: the
-  cost's reference and weights follow the trajectory too. Listing it in
-  `update` as well is allowed and changes nothing.
-- A cost listed under `visual_servoing` uses the `kVisualServoing` rule,
-  not the rule of its residual type (`frame_placement`). Listing it under
-  `update_frame_from_trajectory` too is a setup error.
-- Force feedback needs no `[agimus]` key: the soft-contact dynamics and
-  integrator types carry its settings, and the soft-contact updater follows
-  from them (P8).
-- A cost listed under `update` whose residual type has no rule (see the
-  updater table in design.md) is a setup error.
-- The update rule follows from the residual type, found once at setup
-  (`state`, `control`, `control_grav`, `frame_placement`,
-  `frame_translation`, `frame_rotation`, `frame_velocity`).
-- For a fixed-frame rule, the end-effector input is looked up by the
-  residual's own `frame`.
-- For visual servoing, the robot frame is the cost's residual `frame` and
-  the input key is that name plus `"_vs"` (Python
-  `PY/ocp/ocp_croco_generic.py:488-489`). The world frame must have parent
-  joint 0 and an identity placement (lines 479-486).
-- `[problem]` is ignored: the horizon comes from `OcpParams`.
-
-## Building the horizon from the templates
-
-T7.2, `build_models_from_toml`:
-
-1. Take the `OcpFile` returned by `load_ocp_file` (registration and
-   loading are already done). Until T8.3 implements rolling, throw
-   `std::invalid_argument` if `rolling_buffer` is true.
-2. Create the state: colmpc's if either template uses `colmpc_free_fwd`,
-   otherwise crocoddyl's. Use the reduced model from `RobotModels`.
-3. For each of the `n_controls` running nodes, call
-   `build_model(doc, running_model, ctx, timesteps[i])`, set the armature,
-   and build the node's `NodeUpdater` from `[agimus.running]`.
-4. The terminal node is the same, from `terminal_model`, with dt 0.
-5. Fill `OcpModels::reference_costs`, `residual_costs` and
-   `input_transforms`.
-
-## Reference OCP to convert (demo 08, agimus-demos `main`, read at `5586a0e`)
-
-`agimus_demo_08_collision_avoidance/config/ocp_definition_file.yaml`, with
-`${arm_id}` → `fer`:
-
-- **Running model:**
-  - costs `control_reg` (ControlGrav), `state_reg` (State),
-    `target_pose_tracking` (FrameTranslationStatic on `fer_hand`) and
-    `target_rotation_tracking` (FrameRotationStatic on `fer_hand`);
-  - all with WeightedQuad weights 1.0, cost weight 1.0 and `update: true`;
-  - constraint `collision`: ResidualDistanceCollision2 between
-    `fer_hand_sc_capsule_0` and `obstacle_capsule_0`, lower 0.01, upper inf.
-- **Terminal model:** the same, without `control_reg`; `state_reg` has cost
-  weight 0.0.
-
-The test robot is example-robot-data's panda, which does not have these
-geometry names. The test version uses a capsule from panda's collision model
-(after `collision_as_capsule`) and an obstacle capsule from a small
-environment URDF in `CPP/test/resources/`. The golden generator uses the
-same files.
-
-The Python originals of the other test OCPs are in this repo
-(`PY/ocp/ocp_goal_reaching.yaml`, and
-`agimus_controller_examples/.../panda_pick_and_place/config/ocp_definition_file.yaml`).
