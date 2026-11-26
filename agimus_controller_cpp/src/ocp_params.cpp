@@ -8,9 +8,13 @@ namespace agimus_controller {
 void OcpParams::finalize() {
   const auto& factors = dt_factor_n_seq.factors;
   const auto& n_steps = dt_factor_n_seq.n_steps;
-  if (dt <= std::chrono::nanoseconds::zero()) {
+  if (!(dt > 0.0)) {  // Also rejects NaN.
     throw std::invalid_argument("OcpParams: dt must be > 0, got " +
-                                std::to_string(dt.count()) + " ns.");
+                                std::to_string(dt) + " s.");
+  }
+  if (max_solve_time && !(*max_solve_time > 0.0)) {
+    throw std::invalid_argument("OcpParams: max_solve_time must be > 0, got " +
+                                std::to_string(*max_solve_time) + " s.");
   }
   if (factors.empty() || factors.size() != n_steps.size()) {
     throw std::invalid_argument(
@@ -37,8 +41,8 @@ void OcpParams::finalize() {
     timesteps.insert(timesteps.end(), n_steps[i], dt * factors[i]);
   }
   n_controls = static_cast<int>(timesteps.size());
-  total_time = std::chrono::nanoseconds::zero();
-  for (const auto t : timesteps) {
+  total_time = 0.0;
+  for (const double t : timesteps) {
     total_time += t;
   }
   if (horizon_size != n_controls) {

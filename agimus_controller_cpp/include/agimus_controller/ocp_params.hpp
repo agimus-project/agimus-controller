@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -15,16 +14,17 @@ struct DtFactorsNSeq {
 };
 
 /// Parameters of the OCP and of its CSQP solver (Python OCPParamsBaseCroco).
-/// Fill the inputs, then call finalize().
+/// Fill the inputs, then call finalize(). Times are double seconds, as in
+/// crocoddyl and mim_solvers (design.md, Conventions, Time).
 struct OcpParams {
   // Inputs.
-  std::chrono::nanoseconds dt{0};  // Base integration step.
+  double dt = 0.0;   // Base integration step [s].
   int solver_iters = 0;            // SQP iterations per solve.
   DtFactorsNSeq dt_factor_n_seq;
   int horizon_size = 0;  // Must equal the sum of n_steps (sanity check).
   int qp_iters = 200;    // QP iterations (multiple of 25).
   double termination_tolerance = 1e-3;                     // KKT norm.
-  std::optional<std::chrono::nanoseconds> max_solve_time;  // Empty: none.
+  std::optional<double> max_solve_time;  // Solve timeout [s]; empty: none.
   double eps_abs = 1e-6;
   double eps_rel = 0.0;
   bool callbacks = false;  // Verbose solver callbacks (prints: not RT).
@@ -34,8 +34,8 @@ struct OcpParams {
 
   // Derived by finalize().
   int n_controls = 0;
-  std::vector<std::chrono::nanoseconds> timesteps;  // n_controls entries.
-  std::chrono::nanoseconds total_time{0};           // Exact sum.
+  std::vector<double> timesteps;  // n_controls entries [s].
+  double total_time = 0.0;        // Sum of timesteps, in order, as Python.
 
   /// Setup: validates the inputs and computes the derived fields. Throws
   /// std::invalid_argument naming the offending field.

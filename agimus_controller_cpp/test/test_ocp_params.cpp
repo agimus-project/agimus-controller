@@ -2,20 +2,19 @@
 
 #include <doctest/doctest.h>
 
-#include <chrono>
+#include <cmath>
 #include <stdexcept>
 
 #include "agimus_controller/ocp_params.hpp"
 
 using agimus_controller::DtFactorsNSeq;
 using agimus_controller::OcpParams;
-using namespace std::chrono_literals;
 
 namespace {
 
 OcpParams make_params() {
   OcpParams p;
-  p.dt = 10ms;
+  p.dt = 0.01;
   p.horizon_size = 100;
   p.dt_factor_n_seq = DtFactorsNSeq{{1}, {100}};
   p.solver_iters = 50;
@@ -32,7 +31,7 @@ OcpParams make_params() {
 TEST_CASE("OcpParams: initialization (test_ocp_param_base.py)") {
   auto p = make_params();
   p.finalize();
-  CHECK(p.dt == 10ms);
+  CHECK(p.dt == 0.01);
   CHECK(p.horizon_size == 100);
   CHECK(p.solver_iters == 50);
   CHECK(p.qp_iters == 200);
@@ -42,10 +41,10 @@ TEST_CASE("OcpParams: initialization (test_ocp_param_base.py)") {
   CHECK_FALSE(p.callbacks);
   CHECK(p.n_controls == p.horizon_size);
   REQUIRE(p.timesteps.size() == 100);
-  for (const auto t : p.timesteps) {
-    CHECK(t == 10ms);
+  for (const double t : p.timesteps) {
+    CHECK(t == 0.01);  // dt * 1 is exact.
   }
-  CHECK(p.total_time == 1s);  // Exact: no floating-point sum.
+  CHECK(p.total_time == doctest::Approx(1.0));
 }
 
 TEST_CASE("OcpParams: defaults match the Python dataclass") {
@@ -63,16 +62,16 @@ TEST_CASE("OcpParams: defaults match the Python dataclass") {
 
 TEST_CASE("OcpParams: time-varying steps keep the sequence order") {
   OcpParams p;
-  p.dt = 100ms;
+  p.dt = 0.1;
   p.dt_factor_n_seq = DtFactorsNSeq{{2, 1}, {2, 2}};
   p.horizon_size = 4;
   p.finalize();
   REQUIRE(p.timesteps.size() == 4);
-  CHECK(p.timesteps[0] == 200ms);
-  CHECK(p.timesteps[1] == 200ms);
-  CHECK(p.timesteps[2] == 100ms);
-  CHECK(p.timesteps[3] == 100ms);
-  CHECK(p.total_time == 600ms);
+  CHECK(p.timesteps[0] == doctest::Approx(0.2));
+  CHECK(p.timesteps[1] == doctest::Approx(0.2));
+  CHECK(p.timesteps[2] == doctest::Approx(0.1));
+  CHECK(p.timesteps[3] == doctest::Approx(0.1));
+  CHECK(p.total_time == doctest::Approx(0.6));
 }
 
 TEST_CASE("OcpParams: finalize can be called again after a change") {
@@ -83,7 +82,7 @@ TEST_CASE("OcpParams: finalize can be called again after a change") {
   p.finalize();
   CHECK(p.n_controls == 30);
   CHECK(p.timesteps.size() == 30);
-  CHECK(p.total_time == 400ms);
+  CHECK(p.total_time == doctest::Approx(0.4));
 }
 
 TEST_CASE("OcpParams: invalid inputs throw") {
@@ -92,11 +91,19 @@ TEST_CASE("OcpParams: invalid inputs throw") {
   CHECK_THROWS_AS(p.finalize(), std::invalid_argument);
 
   p = make_params();
-  p.dt = 0ms;
+  p.dt = 0.0;
   CHECK_THROWS_AS(p.finalize(), std::invalid_argument);
 
   p = make_params();
-  p.dt = -1ms;
+  p.dt = -0.001;
+  CHECK_THROWS_AS(p.finalize(), std::invalid_argument);
+
+  p = make_params();
+  p.dt = std::nan("");
+  CHECK_THROWS_AS(p.finalize(), std::invalid_argument);
+
+  p = make_params();
+  p.max_solve_time = 0.0;
   CHECK_THROWS_AS(p.finalize(), std::invalid_argument);
 
   p = make_params();
