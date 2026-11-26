@@ -10,8 +10,9 @@ class DTFactorsNSeq:
     Example:
         Suppose you want to simulate a trajectory of length 0.6s
         but use varying length of integration steps.
-        You want the first 2 time steps to have a higher resolution (factor of 2),
-        the next 2 time steps to have a standard resolution (factor of 1).
+        You want the first 2 time steps to be coarser (factor of 2, i.e. twice
+        the integration step), the next 2 time steps to use the standard
+        integration step (factor of 1).
         Then you would define:
         ```python
         factors = [2, 1]
@@ -19,7 +20,7 @@ class DTFactorsNSeq:
         ```
 
         With dt=0.1, this will result in the following series of timesteps:
-        [0.1, 0.1, 0.2, 0.2]
+        (0.2, 0.2, 0.1, 0.1)
         which sum to the total time of 0.6s.
     """
 
