@@ -87,5 +87,30 @@ Benchmark and production builds: `-DCMAKE_BUILD_TYPE=Release
 
 ## Python judge environment (T0.2)
 
-Not set up yet. Planned: `nix develop` at the repository root (gepetto/nix
-flake).
+`nix develop .#py-judge` from the repository root: Python with the gepetto/nix
+packages (all from the binary cache) and the `agimus_controller` package
+imported from source (`PYTHONPATH`). It runs the Python tests and will run
+the golden generator (T4.1; `tomli-w` writes the TOML fixtures).
+
+```bash
+nix develop .#py-judge --command bash -c 'cd agimus_controller && python -m pytest -q tests'
+```
+
+Result on 2026-11-25 (gepetto/nix `a2acb49`): **58 passed, 8 skipped**. The 8
+skipped tests are the `agimus_franka_description` ones in `test_robot_models.py`
+(they need xacro and ROS's `ament_index_python`).
+
+| Package (Python) | Version | Same as the C++ nix shell? |
+|---|---|---|
+| Python | 3.14.7 | — |
+| pinocchio | 4.1.0 | yes |
+| crocoddyl | 3.2.1 | yes |
+| mim-solvers | 0.3.0 | yes |
+| colmpc | 0.4.0 | yes |
+| coal | 3.0.4 | yes |
+| numpy | 2.5.2 | — |
+| force-feedback-mpc | not in the shell yet (not cached; needed in P8) | — |
+
+Both sides come from the same gepetto/nix revision, so no minor version
+differs and the golden tolerances in design.md apply as written. The
+container differs only in patch versions (crocoddyl 3.2.0, coal 3.0.3).

@@ -114,3 +114,9 @@ design.md.
   `-march=native`, whole stack) is the last stage and needs its own
   environment. Code follow-up on `cpp-port/basics`: `package.nix` builds
   configuration B.
+## T0.2 Python judge: done
+- `nix develop .#py-judge` (flake devShell): 58 passed, 8 skipped (franka
+  description tests). Versions identical to the C++ nix shell (gepetto/nix
+  `a2acb49`); see environment.md.
+- force-feedback-mpc (Python) is not in the shell yet: add it in P8 (it is
+  built locally, not cached).
