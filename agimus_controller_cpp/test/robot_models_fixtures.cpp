@@ -132,6 +132,18 @@ std::vector<std::string> geometry_names(const pinocchio::GeometryModel& m) {
   return names;
 }
 
+const pinocchio::Model& ur5_model() {
+  static const pinocchio::Model model = [] {
+    pinocchio::Model m;
+    pinocchio::urdf::buildModel(
+        (kModelDir / "robots" / "ur_description" / "urdf" / "ur5_robot.urdf")
+            .string(),
+        m);
+    return m;
+  }();
+  return model;
+}
+
 // --- A tiny robot, for what the panda does not cover ------------------------
 
 const char* const kTinyUrdf = R"(<?xml version="1.0"?>

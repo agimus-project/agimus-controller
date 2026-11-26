@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <pinocchio/multibody/geometry.hpp>
+#include <pinocchio/multibody/model.hpp>
 #include <string>
 #include <vector>
 
@@ -64,6 +65,10 @@ class ScopedNoPackagePaths {
 };
 
 std::vector<std::string> geometry_names(const pinocchio::GeometryModel& m);
+
+/// example-robot-data's ur5 (full model, as the Python warm-start test).
+/// Loaded once.
+const pinocchio::Model& ur5_model();
 
 /// A tiny robot, for what the panda does not cover.
 extern const char* const kTinyUrdf;

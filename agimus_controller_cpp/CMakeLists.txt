@@ -43,6 +43,7 @@ add_library(
     src/status.cpp
     src/trajectory_buffer.cpp
     src/trajectory_point.cpp
+    src/warm_start.cpp
 )
 add_library(
     agimus_controller_cpp::agimus_controller_cpp
