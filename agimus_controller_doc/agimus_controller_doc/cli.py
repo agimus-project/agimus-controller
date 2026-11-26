@@ -1,16 +1,9 @@
 import sys
 from pathlib import Path
 from sphinx.cmd.build import build_main
-<<<<<<< HEAD
-from typing import List, Optional
-
-
-def build(argv: Optional[List[str]] = None) -> int:
-=======
 
 
 def build(argv: list | None = None) -> int:
->>>>>>> cf4d68b (Add agimus-controller-doc Nix derivation and expose package in flake)
     """Build the documentation.
 
     Usage (after `poetry install`):
