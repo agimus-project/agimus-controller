@@ -148,3 +148,10 @@ design.md with a test):
 
 Also: ROS `setup_mpc_initial_guess` sets `_first_call = False` without
 `clear_past`; covered by the C++ rolling check (B7).
+
+## T2.6 Solver-side time back to `double`: done
+- `OcpParams::dt`, `timesteps`, `total_time` and `max_solve_time` are
+  `double` seconds; `total_time` is summed in order, as Python's `sum`, so
+  G1 can compare exactly. Green in configurations A and B (67/67).
+- Deviation: `finalize()` also rejects a NaN `dt` and a `max_solve_time`
+  that is not > 0 (setup errors; Python does not check).
