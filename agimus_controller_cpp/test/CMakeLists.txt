@@ -22,6 +22,7 @@ target_link_libraries(
 set(AGIMUS_TESTS
     test_cost_updater
     test_fixed_capacity
+    test_mpc
     test_mpc_data
     test_ocp
     test_ocp_builders
@@ -78,9 +79,31 @@ target_compile_definitions(
     PRIVATE AGIMUS_EXAMPLE_ROBOT_DATA_DIR="${AGIMUS_EXAMPLE_ROBOT_DATA_DIR}"
 )
 target_compile_options(agimus_panda_ocp_fixtures PRIVATE -Wall -Wextra)
-foreach(test_name test_cost_updater test_ocp test_ocp_builders test_warm_start)
+foreach(
+    test_name
+    test_cost_updater
+    test_mpc
+    test_ocp
+    test_ocp_builders
+    test_warm_start
+)
     target_link_libraries(${test_name} PRIVATE agimus_panda_ocp_fixtures)
 endforeach()
+
+# Fixtures of test_mpc (golden set G10a, goal-reaching MPC, unicycle): their
+# own translation unit, so that only it parses TOML (compile RAM).
+add_library(agimus_mpc_fixtures STATIC mpc_fixtures.cpp)
+target_link_libraries(
+    agimus_mpc_fixtures
+    PUBLIC agimus_panda_ocp_fixtures
+    PRIVATE tomlplusplus::tomlplusplus
+)
+target_compile_definitions(
+    agimus_mpc_fixtures
+    PRIVATE AGIMUS_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden"
+)
+target_compile_options(agimus_mpc_fixtures PRIVATE -Wall -Wextra)
+target_link_libraries(test_mpc PRIVATE agimus_mpc_fixtures)
 
 # Golden files written by test/golden/generate_golden.py.
 foreach(test_name test_ocp test_ocp_builders test_ocp_params test_warm_start)
