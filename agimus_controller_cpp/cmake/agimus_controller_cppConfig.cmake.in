@@ -1,7 +1,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(Eigen3 3.3 NO_MODULE)
+find_dependency(Eigen3)
 find_dependency(coal 3.0.3)
 # crocoddyl's config links OpenMP::OpenMP_CXX without looking it up.
 find_dependency(OpenMP COMPONENTS CXX)
