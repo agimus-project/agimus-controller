@@ -107,9 +107,8 @@ class WarmStartShiftPreviousSolution(WarmStartBase):
                 # TODO any better guess ? e.g.
                 # - weighted average of us[i] and us[i+1] based on the time
                 # - calculate us[i] so that xs[i+1] = f(xs[i], us[i])
-        if self._timesteps[-1] > self._dt:
-            # The terminal state sits at the end of a step longer than dt: it
-            # must also be moved forward by dt. Extrapolate it with the last
-            # control, as done for the other long steps above.
-            self._integrator.calc(self._integrator_data, xs[-1], us[-1])
-            xs[-1] = self._integrator_data.xnext.copy()
+        # The terminal state sits at the end of a step: it
+        # must also be moved forward by dt. Extrapolate it with the last
+        # control, as done for the other long steps above.
+        self._integrator.calc(self._integrator_data, xs[-1], us[-1])
+        xs[-1] = self._integrator_data.xnext.copy()
