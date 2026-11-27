@@ -289,7 +289,7 @@ own object, because references differ per node.
   `@rt`.
 - `/// @rt void integrate(const Eigen::VectorXd& x, const Eigen::VectorXd& u, Eigen::VectorXd& x_next)`
   calls `calc` on running model 0 and its data.
-- `results()`, `debug_data()`, `n_controls()`, `dt()`, `nx()`, `nu()`,
+- `results()`, `debug_data()`, `params()`, `n_controls()`, `dt()`, `nx()`, `nu()`,
   `problem()`, `solver()`. `solver()` returns the
   `crocoddyl::SolverAbstract`; solver-specific settings are applied in
   `make_solver` from `OcpParams`.
@@ -491,6 +491,10 @@ class WarmStart {
 - `/// @rt Status run(const RobotState&, std::chrono::nanoseconds now)` is
   `PY/mpc.py:32-66`:
   - return `kNotEnoughData` unless `buffer.has_horizon()` (B2);
+  - a non-`kOk` status from the references or the warm start is returned
+    before the solve and before `clear_past`;
+  - `now` is kept and unused (A3: Python ignores it; open PR #328 may give
+    it a use);
   - set the references;
   - generate the warm start into member storage;
   - solve;
@@ -502,11 +506,15 @@ class WarmStart {
 
   Results are read with `ocp().results()`.
 - `/// @rt Status integrate(RobotState& state, const Eigen::VectorXd& u)`
-  advances q, v and `time` by one dt (B1); `time` is converted from the
-  `double` step at this boundary.
+  advances q and v by one step of running model 0, written into the state's
+  storage (no aliasing, A18), and `time` by `timesteps[0]`, the step it
+  integrated (B1, A12), converted once at setup with `std::chrono::round`.
+  Wrong sizes return `kSizeMismatch` and change nothing.
 - `/// @rt Status push_back(const WeightedTrajectoryPoint&)` forwards to the
   buffer.
-- `debug_data()`, `ocp()`, `buffer()`.
+- `debug_data()`, and `ocp()` and `buffer()` in const and non-const
+  versions (start-up, transforms, geometry). The constructor throws on a
+  null pointer or a buffer whose horizon is not `n_controls + 1` points.
 
 ### What Python does over a run
 
@@ -634,6 +642,7 @@ Every deliberate difference. A test covers each one, and the README lists them.
 | B8 | `use_filter_line_search` is a class attribute, not a dataclass field, so the constructor cannot set it | a normal field, default false |
 | B9 | `TrajectoryBuffer` grows without bound | fixed capacity; `push_back` returns `kBufferFull` |
 | B10 | a cost with zero weight is still evaluated | the updater disables it (see Cost updaters); same solution, less work |
+| B11 | `PY/mpc.py:76-77` advances time by `dt` while it integrates node 0's step (A12) | advances by `timesteps[0]`, rounded to the nanosecond |
 
 **B4, ControlGrav reference.** crocoddyl's `ResidualModelControlGrav` is
 `r = u - g(q)`. It has no reference, so Python's

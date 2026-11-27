@@ -247,6 +247,16 @@ allocation count is still printed; remove the marker when the patch lands.
 
 Measured in T4.2: about 38,000 allocation calls (2.7 MB) over 10 ticks of
 a 7-DoF, 20-node problem.
+`RtMpc.run: 100 ticks` (T4.5) has the same sites and nothing else:
+231,400 calls (19.3 MB) per 100 ticks, of which crocoddyl
+`ResidualModelState::calcCostDiff` 115,542, crocoddyl
+`Stopwatch::watcher(std::string)` 51,090 (from mim_solvers `forwardPass`,
+`forwardPass_without_constraints`, `tryStep`,
+`update_lagrangian_parameters`), libgomp 10,904.
+
+To locate allocations, break on the hook's record lines between
+`start_counting` and `stop_counting` in gdb and classify each by its first
+non-`std` frame (a Python gdb script; about 10 minutes for 100 ticks).
 
 ## Optional: RealtimeSanitizer (T9.2)
 

@@ -131,7 +131,7 @@ design.md with a test):
 |---|---|---|---|
 | A1 | ROS:417-425, mpc.py:38 | `buffer_has_enough_data(1)` true at N points, `run` needs N+1: the controller stalls for good when the publisher stops | C++ uses integer counts (`has_horizon`); report upstream (ROS node not ported) |
 | A2 | ROS:131-163 | `q0` from `/joint_states` never passed: locked joints at neutral | report upstream; C++ `RobotModels` keeps `q0` (T3.1) |
-| A3 | mpc.py:32 | `current_time_ns` ignored | drop the parameter from `Mpc::run` (B11) |
+| A3 | mpc.py:32 | `current_time_ns` ignored | keep `now`, unused (T4.5); PR #328 gives it a use upstream |
 | A4 | ocp_croco_goal_reaching.py:206 | terminal cost uses the last running node's `ee_id` | fix in T4.3 (B12) |
 | A5 | force_feedback.py:185-214 | `force_lb/ub` ignored without constraints | fix in P8 (B13) |
 | A6 | ocp_croco_goal_reaching.py:18-20,82-84 | state weights sized `nq+nv`, not `ndx`: for `nq != nv` Python cannot build the OCP (crocoddyl's size check on the cost) | fix in T4.3 (B14); panda has nq == nv, so G5 is unaffected |
@@ -300,3 +300,24 @@ A3 are fixed or used there. Upstream real-time fixes for the R3 sites
   `upstream_patches/crocoddyl`, unreviewed and unpushed. Never build
   crocoddyl locally.
 - mim_solvers fixes (small library) are still being prepared.
+
+## T4.5 `Mpc`: done (d5d4ed5, bf8abe3)
+- 162/162 in A and B (supervisor reran A; B is the cached nix build of
+  this commit). G10a: 0 error on every quantity over 20 ticks, same
+  iterations; `time` advances 10 ms per tick (Python stays at 0, B1).
+- B2 (factors {1,2}): C++ returns `kNotEnoughData` where Python's
+  `n_controls + 1` check passes. B11 (A12): time advance = `timesteps[0]`
+  rounded, tested on steps where truncation loses 1 ns.
+- Debug off: no clock read and no debug work in the tick (counted through a
+  replaced `clock_gettime`); debug on: 4 clock reads per tick.
+- `RtMpc.run` red only inside the solve (known violations); every other
+  `Rt*` test green.
+- Rulings: `Ocp::params()` accessor (design.md); `now` unused (A3);
+  non-const `ocp()`/`buffer()`.
+- Deviation: the unicycle port uses CSQP with the filter line search: with
+  the merit line search (agimus default, B8) CSQP stops after 1 iteration
+  on the unicycle's infeasible warm start (also in Python mim_solvers
+  0.3.0); Python's test uses SolverDDP. G10a's goal-reaching start-up
+  converges with the default.
+- Upstream (trivial): `PYT/test_mpc_unicycle.py` `plot_trajectory` (skipped)
+  calls `mpc.setup` without a buffer and passes `weight=`.
