@@ -291,3 +291,12 @@ A-ruling through these PRs.
 A1, A12 and B2 were raised on PR #328 (comment and two suggestions); B1 and
 A3 are fixed or used there. Upstream real-time fixes for the R3 sites
 (crocoddyl, mim_solvers) are being prepared (user ruling: upstream PRs).
+
+## Ruling: crocoddyl not real-time for now (user, 2026-11-27)
+- The solve path (crocoddyl, mim_solvers, libgomp) is flagged as not
+  real-time (rt_safety.md, Known violations) and the port moves on. The
+  crocoddyl upstream work is paused: branches `fix/state-residual-cost-diff-alloc`,
+  `fix/openmp-serial-single-thread`, `fix/weighted-quad-hessian` in
+  `upstream_patches/crocoddyl`, unreviewed and unpushed. Never build
+  crocoddyl locally.
+- mim_solvers fixes (small library) are still being prepared.

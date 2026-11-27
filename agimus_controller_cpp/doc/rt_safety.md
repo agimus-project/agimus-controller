@@ -223,6 +223,16 @@ test fails and the allocation is not in `CPP/` code:
 
 ### Known violations
 
+> **Ruling (user, 2026-11-27): the crocoddyl solve path is assumed not
+> real-time for now.** `Ocp::solve` (and so `Mpc::run`) allocates inside
+> crocoddyl, mim_solvers and libgomp on every tick. The port goes on without
+> waiting for upstream fixes; the affected `Rt*` tests stay `may_fail` and
+> listed below, so they keep reporting the count. Everything around the
+> solve (references, warm starts, buffer, updaters, integrate) must stay
+> allocation-free and green. Unpushed crocoddyl fix branches are kept in
+> `workspace_cadmium/upstream_patches/crocoddyl`; do not build crocoddyl
+> locally (too many resources).
+
 An `Rt*` test that is red only inside third-party code, with a confirmed
 backtrace, carries `* doctest::may_fail()` and the comment
 `// R3: third-party allocation`, and is listed here. It still runs, and its
