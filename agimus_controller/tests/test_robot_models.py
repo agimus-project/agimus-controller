@@ -449,5 +449,27 @@ class TestRobotModelsAgainstFrankaDescription(unittest.TestCase):
             self.assertEqual(geom_obj_type, geom_obj_type_test)
 
 
+class TestRobotModelsArmatureOrder(unittest.TestCase):
+    def test_armature_follows_model_velocity_order(self):
+        """The armature is given per moving joint name and must be mapped to the
+        velocity indices of the reduced model, whatever the order of the names."""
+        robot = robex.load("panda")
+        names = ["panda_joint5", "panda_joint3", "panda_joint4"]
+        params = RobotModelParameters(
+            q0=np.zeros(robot.model.nq),
+            moving_joint_names=names,
+            robot_urdf=Path(robot.urdf),
+            srdf=Path(robot.urdf.replace("urdf", "srdf")),
+            urdf_meshes_dir=Path(robot.urdf).parent.parent.parent.parent.parent,
+            armature=np.array([0.5, 0.3, 0.4]),
+        )
+        models = RobotModels(params)
+        model = models.robot_model
+        armature = models.armature
+        self.assertEqual(armature.shape, (model.nv,))
+        # The reduced model keeps the joint order of the full model: 3, 4, 5.
+        np.testing.assert_array_equal(armature, [0.3, 0.4, 0.5])
+
+
 if __name__ == "__main__":
     unittest.main()
