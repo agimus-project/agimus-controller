@@ -105,6 +105,9 @@ class Ocp {
   const OcpDebugData& debug_data() const { return debug_data_; }
   int n_controls() const { return params_.n_controls; }
   double dt() const { return params_.dt; }
+  /// The finalized parameters given at setup (Mpc reads timesteps[0] and
+  /// use_debug_data).
+  const OcpParams& params() const { return params_; }
   Eigen::Index nx() const;
   Eigen::Index nu() const;
   const std::shared_ptr<crocoddyl::ShootingProblem>& problem() const {
