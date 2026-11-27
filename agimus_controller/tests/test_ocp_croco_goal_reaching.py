@@ -1,3 +1,4 @@
+import copy
 import unittest
 import numpy as np
 from pathlib import Path
@@ -117,6 +118,41 @@ class TestOCPGoalReaching(unittest.TestCase):
             places=1,
         )
         # self._visualize() # For debug purposes
+
+    def test_nq_different_from_nv(self):
+        """State weights live in the tangent space (ndx), not in nq + nv."""
+        params = copy.copy(self.params)
+        params.free_flyer = True
+        params.moving_joint_names = params.moving_joint_names | {"root_joint"}
+        params.q0 = np.zeros(16)  # 7 (free flyer) + 9 (panda with fingers)
+        params.q0[6] = 1.0  # unit quaternion
+        params.armature = np.full(13, 0.1)  # 6 (free flyer) + 7 (panda arm)
+        robot_models = RobotModels(params)
+        model = robot_models.robot_model
+        self.assertNotEqual(model.nq, model.nv)
+
+        ocp = OCPCrocoGoalReaching(robot_models, self._ocp_params)
+        ee_name = "panda_hand_tcp"
+        point = WeightedTrajectoryPoint(
+            TrajectoryPoint(
+                robot_configuration=pin.neutral(model),
+                robot_velocity=np.zeros(model.nv),
+                robot_effort=np.zeros(model.nv),
+                end_effector_poses={ee_name: pin.SE3.Identity()},
+            ),
+            TrajectoryPointWeights(
+                w_robot_configuration=np.ones(model.nv),
+                w_robot_velocity=np.ones(model.nv),
+                w_robot_effort=np.ones(model.nv),
+                w_end_effector_poses={ee_name: np.ones(6)},
+            ),
+        )
+        ocp.set_reference_weighted_trajectory([point] * (ocp.n_controls + 1))
+
+        problem = ocp._solver.problem
+        for m in [*problem.runningModels, problem.terminalModel]:
+            weights = m.differential.costs.costs["stateReg"].cost.activation.weights
+            self.assertEqual(weights.size, 2 * model.nv)
 
     def _visualize(self):
         vis = self._create_viewer()

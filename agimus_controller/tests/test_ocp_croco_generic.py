@@ -126,6 +126,29 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
         cmodel = differential.build(self._build_data)
         self.assertIsNone(cmodel.constraints)
 
+    def test_update_requires_weighted_activation(self):
+        for activation in (None, ocp_croco_generic.ActivationModelExp()):
+            with self.assertRaises(ValueError):
+                ocp_croco_generic.CostModelSumItem(
+                    "control",
+                    ocp_croco_generic.CostModelResidual(
+                        residual=ocp_croco_generic.ResidualModelControl(),
+                        activation=activation,
+                    ),
+                    update=True,
+                )
+        # Collision costs only update the scalar cost weight.
+        ocp_croco_generic.CostModelSumItem(
+            "distance",
+            ocp_croco_generic.CostModelResidual(
+                residual=ocp_croco_generic.ResidualDistanceCollision(
+                    collision_pair=("a", "b")
+                ),
+                activation=ocp_croco_generic.ActivationModelExp(),
+            ),
+            update=True,
+        )
+
     def test_residual_model_control_grav(self):
         differential = ocp_croco_generic.DifferentialActionModelFreeFwdDynamics(
             costs=[
