@@ -146,8 +146,9 @@ class DAMSoftContactAugmentedFwdDynamics(DifferentialActionModel):
         if np.sum(np.abs(f_weight)) > 1e-9:
             dam.active_contact = True
             dam.with_force_cost = True
-            dam.f_des = pt.point.forces[self.frame_id].linear[self.enabled_directions]
-            dam.f_weight = f_weight[self.enabled_directions]
+            mask = np.asarray(self.enabled_directions, dtype=bool)
+            dam.f_des = pt.point.forces[self.frame_id].linear[mask]
+            dam.f_weight = f_weight[mask]
         else:
             dam.active_contact = False
             dam.with_force_cost = False
