@@ -9,8 +9,8 @@ import pytest
 force_feedback_mpc = pytest.importorskip("force_feedback_mpc")
 
 from agimus_controller.ocp.ocp_croco_generic_force_feedback import (  # noqa: E402
-  DAMSoftContactAugmentedFwdDynamics,  
-  IAMSoftContactAugmented,
+    DAMSoftContactAugmentedFwdDynamics,
+    IAMSoftContactAugmented,
 )
 
 
