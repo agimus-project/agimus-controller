@@ -18,12 +18,12 @@ struct DtFactorsNSeq {
 /// crocoddyl and mim_solvers (design.md, Conventions, Time).
 struct OcpParams {
   // Inputs.
-  double dt = 0.0;   // Base integration step [s].
-  int solver_iters = 0;            // SQP iterations per solve.
+  double dt = 0.0;       // Base integration step [s].
+  int solver_iters = 0;  // SQP iterations per solve.
   DtFactorsNSeq dt_factor_n_seq;
   int horizon_size = 0;  // Must equal the sum of n_steps (sanity check).
   int qp_iters = 200;    // QP iterations (multiple of 25).
-  double termination_tolerance = 1e-3;                     // KKT norm.
+  double termination_tolerance = 1e-3;   // KKT norm.
   std::optional<double> max_solve_time;  // Solve timeout [s]; empty: none.
   double eps_abs = 1e-6;
   double eps_rel = 0.0;
