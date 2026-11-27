@@ -123,6 +123,18 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
         self.assertIsInstance(residual, ocp_croco_generic.ResidualDistanceCollision)
         self.assertEqual(len(residual.collision_pair), 2)
 
+    def test_static_residual_as_dict_round_trip(self):
+        for cls in (
+            ocp_croco_generic.ResidualModelFramePlacementStatic,
+            ocp_croco_generic.ResidualModelFrameTranslationStatic,
+            ocp_croco_generic.ResidualModelFrameRotationStatic,
+            ocp_croco_generic.ResidualModelFrameVelocityStatic,
+        ):
+            residual = cls(frame_id="effector_body")
+            d = ocp_croco_generic.as_dict(residual)
+            self.assertEqual(d["class"], cls.__name__)
+            self.assertEqual(ocp_croco_generic.create_croco_dataclasses(d), residual)
+
     def test_no_constraint_manager_without_constraints(self):
         differential = ocp_croco_generic.DifferentialActionModelFreeFwdDynamics(
             costs=[

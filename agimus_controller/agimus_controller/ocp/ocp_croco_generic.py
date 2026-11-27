@@ -225,7 +225,7 @@ class ResidualModelFramePlacementStatic(ResidualModel):
     """Variant of ResidualModelFramePlacement requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFramePlacement"
+    class_: T.ClassVar[str] = "ResidualModelFramePlacementStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -279,7 +279,7 @@ class ResidualModelFrameTranslationStatic(ResidualModel):
     """Variant of ResidualModelFrameTranslation requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameTranslation"
+    class_: T.ClassVar[str] = "ResidualModelFrameTranslationStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -333,7 +333,7 @@ class ResidualModelFrameRotationStatic(ResidualModel):
     """Variant of ResidualModelFrameRotation requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameRotation"
+    class_: T.ClassVar[str] = "ResidualModelFrameRotationStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -398,7 +398,7 @@ class ResidualModelFrameVelocityStatic(ResidualModel):
     """Variant of ResidualModelFrameVelocity requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameVelocity"
+    class_: T.ClassVar[str] = "ResidualModelFrameVelocityStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
     reference_frame: T.Optional[str] = "WORLD"
