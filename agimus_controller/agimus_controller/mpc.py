@@ -89,7 +89,8 @@ class MPC(object):
     def append_trajectory_points(
         self, trajectory_points: list[WeightedTrajectoryPoint]
     ):
-        self._buffer.extend(trajectory_points)
+        for trajectory_point in trajectory_points:
+            self._buffer.append(trajectory_point)
 
     def _extract_horizon_from_buffer(self):
         return self._buffer.horizon

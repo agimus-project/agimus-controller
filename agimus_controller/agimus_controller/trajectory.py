@@ -306,9 +306,9 @@ def interpolate_weights(
         res = {}
         for frame in set(ee_w_1.keys()) | set(ee_w_2.keys()):
             if frame not in ee_w_1:
-                res[frame] = _w_interpolate(ee_w_1[frame], np.zeros_like(ee_w_1[frame]))
-            elif frame not in ee_w_2:
                 res[frame] = _w_interpolate(np.zeros_like(ee_w_2[frame]), ee_w_2[frame])
+            elif frame not in ee_w_2:
+                res[frame] = _w_interpolate(ee_w_1[frame], np.zeros_like(ee_w_1[frame]))
             else:
                 res[frame] = _w_interpolate(ee_w_1[frame], ee_w_2[frame])
         return res

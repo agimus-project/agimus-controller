@@ -186,7 +186,7 @@ class OCPBaseCroco(OCPBase):
     ) -> npt.NDArray[np.float64]:
         data = self._problem.runningDatas[0]
         self._problem.runningModels[0].calc(data, state, control)
-        return data.xnext
+        return data.xnext.copy()
 
     @property
     def ocp_results(self) -> OCPResults:

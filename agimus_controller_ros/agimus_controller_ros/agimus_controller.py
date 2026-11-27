@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from copy import deepcopy
 import numpy as np
 import time
 import os
@@ -551,7 +552,12 @@ class AgimusController(Node, RobotModelsMixin):
         if self.params.publish_debug_data:
             compute_time = time.perf_counter() - start_compute_time
             self.ocp_solve_time_pub.publish(Duration(seconds=compute_time).to_msg())
-            self.ocp_x0_pub.publish(self.sensor_msg)
+            # Publish the state given to the solver, which differs from the
+            # measured state when constant_delay is set.
+            x0_msg = deepcopy(self.sensor_msg)
+            x0_msg.joint_state.position = x0_traj_point.robot_configuration.tolist()
+            x0_msg.joint_state.velocity = x0_traj_point.robot_velocity.tolist()
+            self.ocp_x0_pub.publish(x0_msg)
             mpc_debug_msg = mpc_debug_data_to_msg(self.mpc.mpc_debug_data)
             self.mpc_debug_pub.publish(mpc_debug_msg)
 

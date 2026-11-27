@@ -10,6 +10,7 @@ from agimus_controller.trajectory import (
     TrajectoryPoint,
     TrajectoryPointWeights,
     WeightedTrajectoryPoint,
+    interpolate_weights,
 )
 
 
@@ -257,6 +258,29 @@ class TestConstantTrajectoryBuffer(unittest.TestCase):
         obj.append(pt)
         expected_len = sum(dt_factor_n_seq.n_steps) + 1
         self.assertEqual(len(obj.horizon), expected_len)
+
+
+class TestInterpolateWeights(unittest.TestCase):
+    def test_end_effector_frame_missing_on_one_side(self):
+        """A frame present in one point only is interpolated against zero weights."""
+        w_a = np.array([2.0, 4.0])
+        w_b = np.array([6.0, 8.0])
+        zeros = np.zeros(2)
+        kwargs = dict(
+            w_robot_configuration=zeros,
+            w_robot_velocity=zeros,
+            w_robot_acceleration=zeros,
+            w_robot_effort=zeros,
+            w_forces={},
+            w_end_effector_velocities={},
+            w_collision_avoidance=0.0,
+        )
+        p1 = TrajectoryPointWeights(w_end_effector_poses={"a": w_a}, **kwargs)
+        p2 = TrajectoryPointWeights(w_end_effector_poses={"b": w_b}, **kwargs)
+        res = interpolate_weights(p1, p2, 0.25)
+        self.assertEqual(set(res.w_end_effector_poses), {"a", "b"})
+        np.testing.assert_allclose(res.w_end_effector_poses["a"], 0.75 * w_a)
+        np.testing.assert_allclose(res.w_end_effector_poses["b"], 0.25 * w_b)
 
 
 if __name__ == "__main__":
