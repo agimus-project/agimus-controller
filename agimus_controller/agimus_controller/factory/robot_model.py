@@ -351,8 +351,8 @@ class RobotModels:
             ordered like moving_joint_names, with one value per joint; it is
             placed at each joint's velocity indices in the robot model.
         """
-        if self._params.free_flyer or self._robot_model is None:
-            return self._params.armature
+        if self._robot_model is None:
+            raise RuntimeError("A robot model must be loaded before getting the armature.")
         armature = np.zeros(self._robot_model.nv, dtype=np.float64)
         for name, value in zip(self._params.moving_joint_names, self._params.armature):
             joint = self._robot_model.joints[self._robot_model.getJointId(name)]
