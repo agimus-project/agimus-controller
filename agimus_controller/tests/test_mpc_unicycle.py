@@ -154,6 +154,26 @@ def unicycle_plot_solution(xs, figIndex=1, show=True):
 
 
 class TestMPCUnicycle(unittest.TestCase):
+    def test_append_trajectory_points(self):
+        ocp = OCPUnicycle(10, 0.01)
+        buffer = TrajectoryBuffer(DTFactorsNSeq(factors=[1], n_steps=[ocp.n_controls]))
+        mpc = MPC()
+        mpc.setup(ocp, WarmStartUnicycle(), buffer)
+        dt_ns = int(ocp.dt * 1e9)
+        points = [
+            WeightedTrajectoryPoint(
+                point=TrajectoryPoint(
+                    time_ns=k * dt_ns,
+                    robot_configuration=np.array([k, 0.0, 0.0]),
+                    robot_velocity=np.zeros(3),
+                ),
+                weights=TrajectoryPointWeights(),
+            )
+            for k in range(5)
+        ]
+        mpc.append_trajectory_points(points)
+        self.assertEqual(len(buffer), len(points))
+
     def test_hoziron_and_dt(self):
         ocp = OCPUnicycle(100, 0.01)
 
