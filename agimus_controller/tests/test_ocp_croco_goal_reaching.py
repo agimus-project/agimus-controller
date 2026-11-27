@@ -119,6 +119,46 @@ class TestOCPGoalReaching(unittest.TestCase):
         )
         # self._visualize() # For debug purposes
 
+    def test_terminal_end_effector_frame(self):
+        """The terminal cost must use the frame of the terminal reference point."""
+        model = self.robot_models.robot_model
+        ocp = OCPCrocoGoalReaching(self.robot_models, self._ocp_params)
+
+        def point(ee_name):
+            return WeightedTrajectoryPoint(
+                TrajectoryPoint(
+                    robot_configuration=pin.neutral(model),
+                    robot_velocity=np.zeros(model.nv),
+                    robot_effort=np.zeros(model.nv),
+                    end_effector_poses={ee_name: pin.SE3.Identity()},
+                ),
+                TrajectoryPointWeights(
+                    w_robot_configuration=np.ones(model.nv),
+                    w_robot_velocity=np.ones(model.nv),
+                    w_robot_effort=np.ones(model.nv),
+                    w_end_effector_poses={ee_name: np.ones(6)},
+                ),
+            )
+
+        running_frame = "panda_hand_tcp"
+        terminal_frame = "panda_link5"
+        trajectory = [point(running_frame)] * ocp.n_controls + [point(terminal_frame)]
+        ocp.set_reference_weighted_trajectory(trajectory)
+
+        problem = ocp._solver.problem
+        self.assertEqual(
+            problem.runningModels[-1]
+            .differential.costs.costs["goalTracking"]
+            .cost.residual.id,
+            model.getFrameId(running_frame),
+        )
+        self.assertEqual(
+            problem.terminalModel.differential.costs.costs[
+                "goalTracking"
+            ].cost.residual.id,
+            model.getFrameId(terminal_frame),
+        )
+
     def test_nq_different_from_nv(self):
         """State weights live in the tangent space (ndx), not in nq + nv."""
         params = copy.copy(self.params)
