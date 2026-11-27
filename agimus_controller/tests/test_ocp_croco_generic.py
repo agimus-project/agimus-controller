@@ -111,7 +111,7 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
         self.assertAlmostEqual(
             cdata.costs.costs["control"].cost, np.sum(0.5 * w * (u - uref) ** 2)
         )
-        
+
     def test_no_constraint_manager_without_constraints(self):
         differential = ocp_croco_generic.DifferentialActionModelFreeFwdDynamics(
             costs=[
@@ -120,7 +120,7 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
                     ocp_croco_generic.CostModelResidual(
                         residual=ocp_croco_generic.ResidualModelControl()
                     ),
-        )
+                )
             ]
         )
         cmodel = differential.build(self._build_data)
