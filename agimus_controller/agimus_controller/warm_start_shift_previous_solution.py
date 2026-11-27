@@ -55,7 +55,7 @@ class WarmStartShiftPreviousSolution(WarmStartBase):
             actuation,
             cost_model,
         )
-        armature = robot_models.params.armature
+        armature = robot_models.armature
         if armature.size > 0:
             differential.armature = armature
         self._integrator = crocoddyl.IntegratedActionModelEuler(differential, self._dt)
