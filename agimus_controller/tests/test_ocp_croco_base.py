@@ -207,6 +207,14 @@ class TestSimpleOCPCroco(unittest.TestCase):
         """Test the n_controls property."""
         self.assertEqual(self.ocp.n_controls, self.ocp_params.n_controls)
 
+    def test_integrate_returns_independent_array(self):
+        """A second call to integrate must not modify the array returned by the first."""
+        nv = self.robot_model.nv
+        x1 = self.ocp.integrate(self.state_reg, np.zeros(nv))
+        x1_expected = x1.copy()
+        self.ocp.integrate(self.state_reg, np.ones(nv))
+        np.testing.assert_array_equal(x1, x1_expected)
+
     def test_dt(self):
         """Test the dt property."""
         self.assertAlmostEqual(self.ocp.dt, self.ocp_params.dt)

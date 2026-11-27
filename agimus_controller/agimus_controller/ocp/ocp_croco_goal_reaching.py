@@ -15,9 +15,7 @@ class OCPCrocoGoalReaching(OCPBaseCroco):
 
             ### Creation of cost terms
             # State Regularization cost
-            x_reg_weights = np.ones(
-                self._robot_models.robot_model.nq + self._robot_models.robot_model.nv
-            )
+            x_reg_weights = np.ones(self._state.ndx)
             x_residual = crocoddyl.ResidualModelState(
                 self._state,
                 np.concatenate(
@@ -79,9 +77,7 @@ class OCPCrocoGoalReaching(OCPBaseCroco):
 
         ### Creation of cost terms
         # State Regularization cost
-        x_reg_weights = np.ones(
-            self._robot_models.robot_model.nq + self._robot_models.robot_model.nv
-        )
+        x_reg_weights = np.ones(self._state.ndx)
         x_residual = crocoddyl.ResidualModelState(
             self._state,
             np.concatenate(
@@ -200,6 +196,7 @@ class OCPCrocoGoalReaching(OCPBaseCroco):
 
         ee_names = list(iter(ref_weighted_pt.weights.w_end_effector_poses))
         ee_name = ee_names[0]
+        ee_id = self._robot_models.robot_model.getFrameId(ee_name)
         ee_cost = self._solver.problem.terminalModel.differential.costs.costs[
             "goalTracking"
         ]

@@ -59,6 +59,7 @@ class WarmStartShiftPreviousSolutionForceFeedback(WarmStartShiftPreviousSolution
 
         model = ShootingProblem(**data).running_model
         self._enabled_directions = model.differential.enabled_directions
+        self._frame_id = model.differential.frame_id
         self._integrator = model.build(
             BuildData(self._state, self._actuation, robot_models.collision_model)
         )
@@ -81,9 +82,11 @@ class WarmStartShiftPreviousSolutionForceFeedback(WarmStartShiftPreviousSolution
         )
         self.shift()
         if sum(self._enabled_directions) > 1:
-            force = initial_state.forces.linear
+            force = initial_state.forces[self._frame_id].linear
         else:
-            force = initial_state.forces.linear[self._enabled_directions]
+            force = initial_state.forces[self._frame_id].linear[
+                np.asarray(self._enabled_directions, dtype=bool)
+            ]
 
         x0 = np.concatenate(
             [

@@ -187,7 +187,8 @@ class ResidualModelControlGrav(ResidualModel):
     class_: T.ClassVar[str] = "ResidualModelControlGrav"
 
     def update(self, data, obj, pt: WeightedTrajectoryPoint):
-        obj.reference = pt.point.robot_effort
+        # The residual is u - g(q) and has no reference: only the weights
+        # are updated, pt.point.robot_effort is not used.
         return pt.weights.w_robot_effort
 
     def build(self, data: BuildData):
@@ -224,7 +225,7 @@ class ResidualModelFramePlacementStatic(ResidualModel):
     """Variant of ResidualModelFramePlacement requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFramePlacement"
+    class_: T.ClassVar[str] = "ResidualModelFramePlacementStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -278,7 +279,7 @@ class ResidualModelFrameTranslationStatic(ResidualModel):
     """Variant of ResidualModelFrameTranslation requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameTranslation"
+    class_: T.ClassVar[str] = "ResidualModelFrameTranslationStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -332,7 +333,7 @@ class ResidualModelFrameRotationStatic(ResidualModel):
     """Variant of ResidualModelFrameRotation requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameRotation"
+    class_: T.ClassVar[str] = "ResidualModelFrameRotationStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
 
@@ -397,7 +398,7 @@ class ResidualModelFrameVelocityStatic(ResidualModel):
     """Variant of ResidualModelFrameVelocity requiring statically
     defined frame, for multi end effector support"""
 
-    class_: T.ClassVar[str] = "ResidualModelFrameVelocity"
+    class_: T.ClassVar[str] = "ResidualModelFrameVelocityStatic"
     frame_id: T.Optional[str]
     pref: T.Optional[npt.NDArray[np.float64]] = None
     reference_frame: T.Optional[str] = "WORLD"
@@ -584,6 +585,19 @@ class CostModelSumItem:
     update: bool = False
     publish_residual: bool = False
 
+    def __post_init__(self):
+        # Collision costs update the scalar cost weight, not the activation.
+        if (
+            self.update
+            and not isinstance(self.cost.residual, ResidualDistanceCollisionBase)
+            and not hasattr(self.cost.activation, "update")
+        ):
+            raise ValueError(
+                f"Cost '{self.name}' has update: true, so its activation must "
+                "take weights (e.g. ActivationModelWeightedQuad), got "
+                f"{type(self.cost.activation).__name__}."
+            )
+
 
 @dataclasses.dataclass
 class ConstraintModel:
@@ -697,7 +711,7 @@ class DifferentialActionModelFreeFwdDynamics(DifferentialActionModel):
             DifferentialActionModelFreeFwdDynamics = (
                 crocoddyl.DifferentialActionModelFreeFwdDynamics
             )
-        if self.constraints is None:
+        if not self.constraints:
             return DifferentialActionModelFreeFwdDynamics(
                 data.state, data.actuation, costs
             )
@@ -816,9 +830,11 @@ class OCPCrocoGeneric(OCPBaseCroco):
         Initialize references and residuals of dataclass OCPDebugData.
         """
         for cost in self._data.running_model.differential.costs:
-            # collision avoidance costs only has changes in weights, not references.
+            # collision avoidance and gravity compensation costs only have changes
+            # in weights, not references.
             if cost.update and not isinstance(
-                cost.cost.residual, ResidualDistanceCollisionBase
+                cost.cost.residual,
+                (ResidualDistanceCollisionBase, ResidualModelControlGrav),
             ):
                 self._debug_data.references.append((cost.name, None))
             if cost.publish_residual:

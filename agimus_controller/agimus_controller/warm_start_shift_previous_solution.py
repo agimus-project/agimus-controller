@@ -55,7 +55,7 @@ class WarmStartShiftPreviousSolution(WarmStartBase):
             actuation,
             cost_model,
         )
-        armature = robot_models.params.armature
+        armature = robot_models.armature
         if armature.size > 0:
             differential.armature = armature
         self._integrator = crocoddyl.IntegratedActionModelEuler(differential, self._dt)
@@ -107,3 +107,8 @@ class WarmStartShiftPreviousSolution(WarmStartBase):
                 # TODO any better guess ? e.g.
                 # - weighted average of us[i] and us[i+1] based on the time
                 # - calculate us[i] so that xs[i+1] = f(xs[i], us[i])
+        # The terminal state sits at the end of a step: it
+        # must also be moved forward by dt. Extrapolate it with the last
+        # control, as done for the other long steps above.
+        self._integrator.calc(self._integrator_data, xs[-1], us[-1])
+        xs[-1] = self._integrator_data.xnext.copy()
