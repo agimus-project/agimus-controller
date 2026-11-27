@@ -124,6 +124,20 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
             self.assertEqual(d["class"], cls.__name__)
             self.assertEqual(ocp_croco_generic.create_croco_dataclasses(d), residual)
 
+    def test_no_constraint_manager_without_constraints(self):
+        differential = ocp_croco_generic.DifferentialActionModelFreeFwdDynamics(
+            costs=[
+                ocp_croco_generic.CostModelSumItem(
+                    "control",
+                    ocp_croco_generic.CostModelResidual(
+                        residual=ocp_croco_generic.ResidualModelControl()
+                    ),
+                )
+            ]
+        )
+        cmodel = differential.build(self._build_data)
+        self.assertIsNone(cmodel.constraints)
+
     def test_update_requires_weighted_activation(self):
         for activation in (None, ocp_croco_generic.ActivationModelExp()):
             with self.assertRaises(ValueError):
