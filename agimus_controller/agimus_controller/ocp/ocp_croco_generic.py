@@ -187,7 +187,8 @@ class ResidualModelControlGrav(ResidualModel):
     class_: T.ClassVar[str] = "ResidualModelControlGrav"
 
     def update(self, data, obj, pt: WeightedTrajectoryPoint):
-        obj.reference = pt.point.robot_effort
+        # The residual is u - g(q) and has no reference: only the weights
+        # are updated, pt.point.robot_effort is not used.
         return pt.weights.w_robot_effort
 
     def build(self, data: BuildData):
@@ -829,9 +830,11 @@ class OCPCrocoGeneric(OCPBaseCroco):
         Initialize references and residuals of dataclass OCPDebugData.
         """
         for cost in self._data.running_model.differential.costs:
-            # collision avoidance costs only has changes in weights, not references.
+            # collision avoidance and gravity compensation costs only have changes
+            # in weights, not references.
             if cost.update and not isinstance(
-                cost.cost.residual, ResidualDistanceCollisionBase
+                cost.cost.residual,
+                (ResidualDistanceCollisionBase, ResidualModelControlGrav),
             ):
                 self._debug_data.references.append((cost.name, None))
             if cost.publish_residual:
