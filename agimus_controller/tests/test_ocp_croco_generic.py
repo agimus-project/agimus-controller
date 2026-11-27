@@ -112,6 +112,58 @@ class OCPCrocoGenericBuilderTest(unittest.TestCase):
             cdata.costs.costs["control"].cost, np.sum(0.5 * w * (u - uref) ** 2)
         )
 
+    def test_update_requires_weighted_activation(self):
+        for activation in (None, ocp_croco_generic.ActivationModelExp()):
+            with self.assertRaises(ValueError):
+                ocp_croco_generic.CostModelSumItem(
+                    "control",
+                    ocp_croco_generic.CostModelResidual(
+                        residual=ocp_croco_generic.ResidualModelControl(),
+                        activation=activation,
+                    ),
+                    update=True,
+                )
+        # Collision costs only update the scalar cost weight.
+        ocp_croco_generic.CostModelSumItem(
+            "distance",
+            ocp_croco_generic.CostModelResidual(
+                residual=ocp_croco_generic.ResidualDistanceCollision(
+                    collision_pair=("a", "b")
+                ),
+                activation=ocp_croco_generic.ActivationModelExp(),
+            ),
+            update=True,
+        )
+
+    def test_residual_model_control_grav(self):
+        differential = ocp_croco_generic.DifferentialActionModelFreeFwdDynamics(
+            costs=[
+                ocp_croco_generic.CostModelSumItem(
+                    "control_grav",
+                    ocp_croco_generic.CostModelResidual(
+                        residual=ocp_croco_generic.ResidualModelControlGrav(),
+                        activation=ocp_croco_generic.ActivationModelWeightedQuad(1.0),
+                    ),
+                    update=True,
+                )
+            ]
+        )
+        cmodel = differential.build(self._build_data)
+        pt = WeightedTrajectoryPoint(
+            point=TrajectoryPoint(robot_effort=np.random.random(self._actuation.nu)),
+            weights=TrajectoryPointWeights(
+                w_robot_effort=np.arange(1.0, self._actuation.nu + 1.0)
+            ),
+        )
+
+        differential.update(self._build_data, cmodel, pt)
+        cost = cmodel.costs.costs["control_grav"].cost
+        np.testing.assert_array_equal(
+            cost.activation.weights, pt.weights.w_robot_effort
+        )
+        # crocoddyl's ResidualModelControlGrav has no reference: r = u - g(q).
+        self.assertFalse(hasattr(cost.residual, "reference"))
+
 
 class OCPCrocoGenericTest(unittest.TestCase):
     def setUp(self):

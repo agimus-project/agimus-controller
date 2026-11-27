@@ -146,8 +146,9 @@ class DAMSoftContactAugmentedFwdDynamics(DifferentialActionModel):
         if np.sum(np.abs(f_weight)) > 1e-9:
             dam.active_contact = True
             dam.with_force_cost = True
-            dam.f_des = pt.point.forces[self.frame_id].linear[self.enabled_directions]
-            dam.f_weight = f_weight[self.enabled_directions]
+            mask = np.asarray(self.enabled_directions, dtype=bool)
+            dam.f_des = pt.point.forces[self.frame_id].linear[mask]
+            dam.f_weight = f_weight[mask]
         else:
             dam.active_contact = False
             dam.with_force_cost = False
@@ -212,6 +213,14 @@ class IAMSoftContactAugmented(IntegratedActionModelAbstract):
                 f"Value has {len(self.force_lb)} elements, while should have {force_dimension}"
             )
             self.force_lb = np.array(self.force_lb)
+
+        # The force box constraint is only evaluated by the IAM when
+        # `with_force_constraint` is set, and the IAM puts the bounds in its
+        # `g_lb`/`g_ub` itself. This also holds when the DAM has no constraint.
+        if np.isfinite(self.force_lb).any() or np.isfinite(self.force_ub).any():
+            iam.with_force_constraint = True
+            iam.force_lb = self.force_lb
+            iam.force_ub = self.force_ub
         return iam
 
 
