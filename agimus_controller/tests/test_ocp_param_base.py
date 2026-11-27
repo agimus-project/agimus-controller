@@ -11,6 +11,18 @@ class TestOCPParamsCrocoBase(unittest.TestCase):
     def __init__(self, methodName="runTest"):
         super().__init__(methodName)
 
+    def test_use_filter_line_search_is_a_field(self):
+        """use_filter_line_search can be set from the constructor and is stored."""
+        kwargs = {
+            "dt": 0.01,
+            "horizon_size": 10,
+            "dt_factor_n_seq": DTFactorsNSeq(factors=[1], n_steps=[10]),
+            "solver_iters": 50,
+        }
+        self.assertFalse(OCPParamsBaseCroco(**kwargs).use_filter_line_search)
+        params = OCPParamsBaseCroco(**kwargs, use_filter_line_search=True)
+        self.assertTrue(params.use_filter_line_search)
+
     def test_initialization(self):
         """
         Test the initialization of the OCPParamsBaseCroco class.
