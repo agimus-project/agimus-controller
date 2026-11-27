@@ -280,7 +280,7 @@ class RobotModels:
                     parent_frame=geom_object.parentFrame,
                     parent_joint=geom_object.parentJoint,
                     collision_geometry=coal.Capsule(
-                        geometry.radius, geometry.halfLength
+                        geometry.radius, 2 * geometry.halfLength
                     ),
                     placement=geom_object.placement,
                 )
