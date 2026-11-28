@@ -2,6 +2,7 @@
 // the closed loop of golden set G10a, behaviour changes B1/A12 (time advance)
 // and B2 (kNotEnoughData), debug data, and the RT tests.
 
+#include <omp.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -565,8 +566,12 @@ TEST_CASE("RtMpc.run: early returns") {
 // forwardPass_without_constraints), and libgomp teams in ShootingProblem
 // calc/calcDiff. Mpc, the warm start, the buffer and the updaters allocate
 // nothing.
-TEST_CASE("RtMpc.run: 100 ticks after warm-up" * doctest::may_fail()) {
-  const auto params = make_params(kN);
+namespace {
+
+// The 100 ticks of RtMpc.run, with OcpParams::n_threads = `n_threads`.
+void rt_run_100_ticks(int n_threads) {
+  auto params = make_params(kN);
+  params.n_threads = n_threads;
   constexpr int kTicks = 100;
   const int n_initial = 2 * (kN + 1);  // the ROS node starts at two horizons
   auto m = started_mpc(params, n_initial, static_cast<std::size_t>(n_initial));
@@ -595,4 +600,64 @@ TEST_CASE("RtMpc.run: 100 ticks after warm-up" * doctest::may_fail()) {
   CHECK(m.mpc->debug_data().reference_id == kTicks);
   CHECK(state.time == (kTicks + 1) * 10ms);
   for (const auto& x : m.ocp->results().states) CHECK(x.allFinite());
+}
+
+}  // namespace
+
+// R3: third-party allocation, see rt_safety.md Known violations. All
+// 231,400 allocation calls of the 100 ticks (T4.5, gdb aggregation) happen
+// inside Ocp::solve's SolverCSQP::solve: crocoddyl
+// ResidualModelState::calcCostDiff, crocoddyl Stopwatch strings and Eigen
+// resizes in SolverCSQP (forwardPass, tryStep, update_lagrangian_parameters,
+// forwardPass_without_constraints), and libgomp teams in ShootingProblem
+// calc/calcDiff. Mpc, the warm start, the buffer and the updaters allocate
+// nothing.
+TEST_CASE("RtMpc.run: 100 ticks after warm-up" * doctest::may_fail()) {
+  rt_run_100_ticks(1);
+}
+
+// R3: third-party allocation, see rt_safety.md Known violations. The same
+// sites as the 1-thread test; the allocation hook counts per thread, so only
+// the calling thread's allocations are counted (not the OpenMP workers').
+TEST_CASE("RtMpc.run: n_threads 4" * doctest::may_fail()) {
+  // The thread count must not be capped by OMP_THREAD_LIMIT.
+  REQUIRE(omp_get_thread_limit() >= 4);
+  rt_run_100_ticks(4);
+}
+
+TEST_CASE("Mpc.run: n_threads 4 gives the solution of n_threads 1") {
+  REQUIRE(omp_get_thread_limit() >= 4);
+  constexpr int kTicks = 100;
+  const int n_initial = 2 * (kN + 1);
+  auto run = [&](int n_threads) {
+    auto params = make_params(kN);
+    params.n_threads = n_threads;
+    auto m =
+        started_mpc(params, n_initial, static_cast<std::size_t>(n_initial));
+    RobotState state = panda_state(q_init());
+    std::vector<std::vector<Eigen::VectorXd>> xs, us;
+    for (int k = 0; k < kTicks; ++k) {
+      REQUIRE(m.mpc->run(state, state.time) == Status::kOk);
+      const auto& r = m.ocp->results();
+      xs.push_back(r.states);
+      us.push_back(r.feed_forward_terms);
+      REQUIRE(m.mpc->integrate(state, r.feed_forward_terms[0]) == Status::kOk);
+      REQUIRE(m.mpc->push_back(moving_target_point(n_initial + k, 10ms)) ==
+              Status::kOk);
+    }
+    return std::make_pair(xs, us);
+  };
+  const auto one = run(1);
+  const auto four = run(4);
+  double worst = 0.0;
+  for (int k = 0; k < kTicks; ++k) {
+    for (std::size_t i = 0; i < one.first[k].size(); ++i) {
+      worst = std::max(worst, max_abs(one.first[k][i], four.first[k][i]));
+    }
+    for (std::size_t i = 0; i < one.second[k].size(); ++i) {
+      worst = std::max(worst, max_abs(one.second[k][i], four.second[k][i]));
+    }
+  }
+  MESSAGE("max |xs, us| difference over " << kTicks << " ticks: " << worst);
+  CHECK(worst <= 1e-10);
 }
