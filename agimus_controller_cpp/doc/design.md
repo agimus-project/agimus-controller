@@ -618,13 +618,13 @@ fails on time.
   with Intel oneAPI, and compare. It needs a new environment with the whole
   stack rebuilt at full optimisation, so it waits until the code can be
   profiled.
-- **Machine.** Numbers that decide anything (R8, T10.x) come from a desktop
-  or server CPU, never a laptop. Laptops throttle with temperature, and
-  their hybrid performance/efficiency cores make thread timings depend on
-  the scheduler. The supervisor asks the user for the machine (a
-  workstation such as miyanoura was offered by a reviewer; access goes
-  through whoever administers it). A laptop is fine for checking that
-  `bench_mpc` runs.
+- **Machine (user ruling, 2026-11-28).** The target is the robot's onboard
+  computer: numbers that decide anything (R8, T10.x) are finally measured
+  there. Until then the user's laptop (i7-11850H, 8 cores / 16 threads) is
+  the first estimate, and its numbers are recorded as such. Laptop caveats
+  to record with each run: power plugged in, CPU governor and turbo state
+  (`/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor`), temperature
+  throttling, and the core the run was pinned to.
 
 ## Behaviour changes from Python
 
