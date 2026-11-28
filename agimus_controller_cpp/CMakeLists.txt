@@ -14,6 +14,11 @@ include(CMakePackageConfigHelpers)
 
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(
+    AGIMUS_CONTROLLER_BUILD_BENCHMARKS
+    "Build benchmark/bench_mpc (needs BUILD_TESTING for the fixtures). Use Release with AGIMUS_CONTROLLER_RT_CHECKS=OFF."
+    OFF
+)
+option(
     AGIMUS_CONTROLLER_RT_CHECKS
     "Real-time checks: EIGEN_RUNTIME_NO_MALLOC, NaN-initialized Eigen objects and assertions on. Not for production or benchmarks."
     ${BUILD_TESTING}
@@ -118,4 +123,7 @@ install(FILES package.xml DESTINATION share/agimus_controller_cpp)
 
 if(BUILD_TESTING)
     add_subdirectory(test)
+endif()
+if(AGIMUS_CONTROLLER_BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
 endif()
