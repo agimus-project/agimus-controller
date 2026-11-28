@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>agimus_controller_cpp</name>
+  <version>0.0.0</version>
+  <description>Real-time-safe C++ port of agimus_controller (whole-body MPC with Crocoddyl).</description>
+  <maintainer email="guilhem.saurel@laas.fr">Guilhem Saurel</maintainer>
+  <license>BSD-3-Clause</license>
+  <url type="website">https://github.com/agimus-project/agimus_controller</url>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <depend>coal</depend>
+  <depend>crocoddyl</depend>
+  <depend>eigen</depend>
+  <depend>mim_solvers</depend>
+  <depend>pinocchio</depend>
+
+  <test_depend>doctest</test_depend>
+  <test_depend>example-robot-data</test_depend>
+  <test_depend>python3</test_depend>
+  <!-- No rosdep key exists yet for toml++; this is the Debian/Ubuntu package name. -->
+  <test_depend>libtomlplusplus-dev</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

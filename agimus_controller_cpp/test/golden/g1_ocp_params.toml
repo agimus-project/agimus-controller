@@ -1,0 +1,134 @@
+[meta]
+set = "G1"
+python_under_test = "agimus_controller.ocp_param_base.OCPParamsBaseCroco"
+agimus_controller_commit = "1ef2f86b9e04bf4b40eba9f3cc111da4d78fe3e1"
+pinocchio = "4.1.0"
+crocoddyl = "3.2.1"
+mim_solvers = "0.3.0"
+numpy = "2.5.2"
+example_robot_data = "5.0.0"
+python = "3.14.7"
+generator = "agimus_controller_cpp/test/golden/generate_golden.py"
+notes = [
+    "horizon_size = sum(n_steps) for each case.",
+    "timesteps[i] = dt * factor (one IEEE multiplication): compare exactly.",
+    "total_time = Python's built-in sum(timesteps). Since Python 3.12 sum() of floats is compensated (Neumaier), so it is not the left-to-right sum; here every case differs from it by 1-2 ulp.",
+]
+
+[inputs]
+dt = 0.01
+
+[[cases]]
+factors = [
+    1,
+]
+n_steps = [
+    19,
+]
+horizon_size = 19
+n_controls = 19
+timesteps = [
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+]
+total_time = 0.19
+
+[[cases]]
+factors = [
+    1,
+    2,
+]
+n_steps = [
+    20,
+    10,
+]
+horizon_size = 30
+n_controls = 30
+timesteps = [
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+]
+total_time = 0.4
+
+[[cases]]
+factors = [
+    1,
+    2,
+    4,
+    8,
+]
+n_steps = [
+    5,
+    5,
+    5,
+    4,
+]
+horizon_size = 19
+n_controls = 19
+timesteps = [
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.01,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.02,
+    0.04,
+    0.04,
+    0.04,
+    0.04,
+    0.04,
+    0.08,
+    0.08,
+    0.08,
+    0.08,
+]
+total_time = 0.67

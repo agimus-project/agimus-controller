@@ -1,0 +1,249 @@
+# Real-time safety
+
+The MPC runs inside a control loop. A function tagged `@rt` must take a
+bounded time and never block, so it does not allocate, free, throw, lock, log
+or do I/O. A test proves this for every `@rt` function. **Code in the RT path
+that is not RT-safe must make a test go red.**
+
+## Rules for `@rt` code
+
+1. Size every buffer at setup: Eigen vectors and matrices, `std::vector`s of
+   them, `FixedVector`s, solver workspaces. RT code writes only into storage
+   that already has the right size.
+2. Assign Eigen objects of equal size (`dst = src`, `dst.noalias() = A * x`).
+   An expression that creates a temporary of dynamic size allocates. Write
+   it into a preallocated member instead. `pinocchio::SE3`, `Motion`,
+   `Force` and fixed-size Eigen types never allocate.
+3. Containers: no `push_back`, `resize`, `insert` or `reserve` on standard
+   containers; no `std::string` construction or concatenation; no `std::map`
+   or `std::unordered_map`. Use `FixedVector`, `FixedString` and
+   index-addressed `std::vector`s sized at setup.
+4. No `throw`, and no call that can throw on valid input. Return a `Status`.
+5. No `new`, `make_shared`, `shared_ptr` copies, `std::function` holding a
+   large capture, `dynamic_cast` or `dynamic_pointer_cast`. Resolve types at
+   setup and cache raw pointers.
+6. No logging, no `std::cout`, no file access, no mutex. A solver callback
+   that prints is a setup or debug feature and is documented as non-RT.
+7. Warm-up is setup. Some libraries allocate lazily on their first call
+   (first `calc`, the OpenMP thread pool). The setup phase therefore ends
+   with one full call of the RT path. The ROS node does the same: an initial
+   solve before the loop starts.
+8. Threads: the RT tests use `n_threads = 1`. The `n_threads > 1` test
+   (T4.6) is separate.
+
+## Harness
+
+Lives in `CPP/test/rt/`. The test-support static library is
+`agimus_rt_test_support`. Every test executable links it, and it also holds
+the single doctest `main` (`DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN`).
+
+### Allocation hook (`allocation_hook.cpp`)
+
+Replaces, in the test executable:
+
+- every global `operator new` and `operator delete`: plain, array, nothrow,
+  `std::align_val_t`, and sized variants;
+- `malloc`, `free`, `calloc`, `realloc`, `posix_memalign`, `aligned_alloc`,
+  `memalign`, `valloc`, `pvalloc`. These forward to glibc's `__libc_malloc`,
+  `__libc_free`, `__libc_calloc`, `__libc_realloc` and `__libc_memalign`
+  (declared `extern "C"`).
+
+Because the executable defines these symbols, the dynamic linker resolves
+calls from shared libraries (crocoddyl, pinocchio, coal, mim_solvers) to
+them. That is how allocations inside third-party code are seen. Eigen's
+`aligned_malloc` calls `malloc`, so it is seen too.
+
+- A `thread_local` flag turns counting on. A `thread_local` counter records
+  the number of calls and the bytes requested. Only allocating calls
+  (`malloc`, `new`, `calloc`, `realloc`, the aligned variants) count. A
+  `free` or `delete` counts too, because freeing in the loop is just as
+  forbidden.
+- With the environment variable `AGIMUS_RT_ABORT_ON_ALLOC=1`, the first
+  counted call calls `std::abort()`. Running the failing test under gdb then
+  gives the backtrace of the offender.
+- The hook functions never allocate themselves. Read the environment
+  variable once, in a static initialiser.
+- Do not combine the hook with ASan or another allocator replacement. Give
+  sanitizer builds their own configuration without the hook.
+
+### Guard and macros (`rt_guard.hpp`)
+
+- `class ScopedRtGuard`: the constructor resets the counters, sets the
+  thread-local flag and calls `Eigen::internal::set_is_malloc_allowed(false)`.
+  The destructor restores both. `allocations()` and `bytes()` read the
+  counters.
+- `CHECK_RT_SAFE(statement)` runs `statement` inside a guard, then does
+  `CHECK_MESSAGE(guard.allocations() == 0, ...)` with a message naming the
+  statement, the count and the bytes.
+- `CHECK_ALLOCATES(statement)` is the opposite. It is used by the negative
+  tests.
+- `CHECK_ABORTS(statement)` stands in for death tests, which doctest does
+  not have.
+  - It `fork()`s; the child runs `statement` and calls `_exit(0)`.
+  - The parent `waitpid`s and checks that the child was killed by `SIGABRT`.
+  - The statement runs in a capture-less lambda, so it cannot use the
+    test's local variables.
+  - Use it only in the negative-test executable, which stays single-threaded
+    (no OpenMP), so forking is safe.
+- An Eigen allocation under the guard, in code compiled with
+  `EIGEN_RUNTIME_NO_MALLOC`, **aborts** the test executable rather than
+  being counted, because Eigen's check fires before the allocation reaches
+  the hook. doctest reports the crash with the test name. Other allocations
+  are counted and reported by `CHECK_RT_SAFE`.
+- Never put doctest assertions inside a guarded statement, because doctest
+  allocates.
+- The compiler may elide a `new`/`delete` pair whose pointer does not
+  escape, so negative tests write their results and pointers to `volatile`
+  globals.
+
+### Eigen flags
+
+CMake option `AGIMUS_CONTROLLER_RT_CHECKS`, default `ON` when `BUILD_TESTING`
+is on. When ON, it adds to the library target (PUBLIC, so the tests get the
+same definitions and every translation unit agrees):
+
+- `EIGEN_RUNTIME_NO_MALLOC`, which makes `set_is_malloc_allowed(false)`
+  effective: Eigen asserts on any heap allocation in code compiled in our
+  translation units;
+- `-UNDEBUG`, because Eigen's checks are `eigen_assert`s and need
+  assertions on. RT-check builds are therefore not release builds.
+  Production and benchmark builds set the option OFF (design.md,
+  Performance section);
+- `EIGEN_INITIALIZE_MATRICES_BY_NAN`, which fills every Eigen matrix and
+  vector created in our translation units with NaN. A value that is read
+  before it is written then turns into NaN and fails a comparison, instead
+  of silently holding whatever was in memory (often 0, which hides the
+  bug). Code that needs zeros must call `setZero()` or `Zero()`.
+  Precompiled libraries (pinocchio, crocoddyl) are not affected.
+
+Defining these macros in our translation units only means that Eigen's
+inline functions differ between our code and the precompiled libraries.
+That is harmless for these three macros (they do not change object layout),
+but do not add a macro that does, such as `EIGEN_MAX_ALIGN_BYTES` or
+`EIGEN_DONT_VECTORIZE`.
+
+### Build configurations
+
+Every task runs the tests in configurations A and B, in that order. A task
+is not done until both are green.
+
+| Config | Flags | Catches |
+|---|---|---|
+| A, debug | `CMAKE_BUILD_TYPE=Debug`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | logic errors with full assertions and readable backtraces; run first |
+| B, optimised | `CMAKE_BUILD_TYPE=RelWithDebInfo` with `CMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"`, `AGIMUS_CONTROLLER_RT_CHECKS=ON` | bugs that only appear under optimisation: undefined behaviour, aliasing, uninitialised reads; also checks that the RT tests hold when the optimiser elides or merges allocations |
+| C, native | B plus `CMAKE_BUILD_TYPE=Release` and `-march=native`, for **the whole stack** | vectorisation and alignment bugs with AVX |
+
+Notes on B and C (PR #334):
+
+- CMake's own `RelWithDebInfo` flags are `-O2 -g -DNDEBUG`, so B sets
+  `CMAKE_CXX_FLAGS_RELWITHDEBINFO="-O3 -g"` explicitly (`-DNDEBUG` is
+  dropped anyway by the RT checks' `-UNDEBUG`). Debug information makes the
+  compiler use more RAM than a plain `Release` build: the 2 GB per
+  translation unit limit (R6) is checked in configuration B.
+- **C is the very last stage**, run only after A and B are green for the
+  whole phase, and it needs its own environment (a new nix shell or docker
+  image) in which the whole stack is rebuilt with the same flags (see
+  below).
+
+Configuration C needs care, because of what happened with moto's aligned
+maps. With AVX, Eigen aligns fixed-size objects such as `Matrix4d` and 6×6
+matrices to 32 bytes instead of 16. `pinocchio::Data` and the crocoddyl
+datas contain such members. If our code is built with `-march=native` but
+links the generic pinocchio from `/opt/ros`, the two sides disagree on
+struct layout and the process crashes or computes garbage. Configuration C
+is therefore only valid when every Eigen user in the process (pinocchio,
+coal, crocoddyl, mim_solvers, colmpc, force_feedback_mpc, crocoddyl-toml,
+this package) is built from source with the same flags, in a separate
+install prefix. It runs at the end of P4, P7 and P8, and in T10.7, not per
+task. It is a test configuration only: shipped builds stay generic x86-64
+(R8).
+
+The allocation hook is the source of truth: it also sees allocations in
+precompiled third-party code, which Eigen's flag cannot see. The Eigen flag
+adds an exact abort location for our own code.
+
+`EIGEN_NO_AUTOMATIC_RESIZING` is **not** used. Eigen 3.4 checks it only in
+`PlainObjectBase::_resize_to_match`; plain assignment goes through
+`resize_if_allowed` (`Eigen/src/Core/AssignEvaluator.h`) and resizes
+silently. A size-changing assignment under the guard is still caught,
+because the resize reallocates and `EIGEN_RUNTIME_NO_MALLOC` aborts.
+
+### Negative tests (`test_rt_harness.cpp`)
+
+These prove the harness goes red. Each uses `CHECK_ALLOCATES`, or
+`CHECK_ABORTS` for the Eigen asserts:
+
+- `std::vector<double>` growth (`push_back` past capacity);
+- a `std::string` longer than the small-string buffer;
+- `std::make_shared<int>()`;
+- `throw` plus `catch` of a `std::runtime_error`;
+- a `delete` of memory allocated before the guard;
+- a C `malloc`;
+- an allocation inside our shared library (`compute_horizon_indexes`),
+  which proves that calls from shared libraries are interposed. This one is
+  added in T2.5, when the function exists; T1.2's done-when excludes it;
+- `CHECK_ABORTS` of `Eigen::VectorXd` construction with a dynamic size under
+  the guard (proves `EIGEN_RUNTIME_NO_MALLOC` is active);
+- `CHECK_ABORTS` of a dynamic-size temporary, `Eigen::VectorXd y = A * x;`;
+- `CHECK_ABORTS` of a resizing assignment `a = b` (sizes 3 and 4);
+- a control: the same Eigen allocation without the guard does not abort, so
+  `CHECK_ABORTS` cannot pass vacuously;
+- positive controls: fixed-size Eigen work, and a dynamic `A * x` into
+  preallocated storage, are RT-safe.
+
+### Coverage rule (`check_rt_coverage`)
+
+- Every header tag `/// @rt Type::method` needs at least one doctest test
+  case whose name starts with `RtType.method`, e.g.
+  `TEST_CASE("RtMpc.run: 100 ticks after warm-up")`. `TEST_CASE_FIXTURE`
+  follows the same naming rule.
+- A free function `/// @rt name` needs a test case named `RtFree.name...`.
+- Each such test exercises the method under `CHECK_RT_SAFE` with realistic
+  sizes, after warm-up, and covers every early-return branch (full buffer,
+  unknown frame, missing transform, ...).
+
+`CPP/test/check_rt_coverage.py` greps for the tags and test names and fails
+listing the uncovered ones. It is registered as a ctest, so a new `@rt`
+function without a test turns the build red.
+
+## Third-party violations
+
+Ruling R3: a third-party allocation in the RT path stays red. When an `Rt*`
+test fails and the allocation is not in `CPP/` code:
+
+1. Rerun the single test with `AGIMUS_RT_ABORT_ON_ALLOC=1` under gdb and save
+   the backtrace.
+2. Find the first frame outside `CPP/` and record the library, the function
+   and the trigger (first call only? every call? a size change?).
+3. If it allocates only on the first call, check that warm-up covers it. If
+   the test still fails after a correct warm-up, it is a real violation.
+4. Stop. Report to the supervisor: the test name, the backtrace and a
+   proposed patch site. The supervisor escalates to the user. Do not wrap,
+   skip or disable the test.
+
+### Known violations
+
+An `Rt*` test that is red only inside third-party code, with a confirmed
+backtrace, carries `* doctest::may_fail()` and the comment
+`// R3: third-party allocation`, and is listed here. It still runs, and its
+allocation count is still printed; remove the marker when the patch lands.
+
+| Test | Library and site | Trigger | Proposed patch |
+|---|---|---|---|
+| `RtOcp.solve: ...` (2 tests, T4.2) | crocoddyl `ResidualModelState::calcCostDiff` (`multibody/residuals/state.hxx:114-121`) | every call: `RxBlock^T * diag * RxBlock` on dynamic blocks makes a temporary per joint | `lazyProduct`, or a buffer in the data |
+| same | mim_solvers `SolverCSQP::forwardPass` | every call: `crocoddyl::Stopwatch::watcher(std::string)` builds strings even with the profiler off | guard with `profiler_status()` or static names |
+| same | libgomp `gomp_new_team` | every OpenMP parallel region, even with 1 thread (crocoddyl `ShootingProblem::calc/calcDiff`, mim_solvers `update_lagrangian_parameters`, `tryStep`) | a serial loop when `nthreads == 1` |
+| same | mim_solvers `SolverCSQP::tryStep` | every call: an Eigen `resize` | allocate at construction |
+
+Measured in T4.2: about 38,000 allocation calls (2.7 MB) over 10 ticks of
+a 7-DoF, 20-node problem.
+
+## Optional: RealtimeSanitizer (T9.2)
+
+Clang 20 and newer provide `-fsanitize=realtime`. Functions marked
+`[[clang::nonblocking]]` are checked at run time for allocations, locks and
+blocking system calls, including inside libraries. If the container has
+clang 20 or newer, add a separate build of the `Rt*` tests with RTSan. Mark
+the test lambdas, not the library API, so the library keeps building with
+GCC. This catches locks and system calls, which the allocation hook cannot
+see.
